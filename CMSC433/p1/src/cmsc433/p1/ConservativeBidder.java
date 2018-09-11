@@ -91,7 +91,6 @@ public class ConservativeBidder implements Bidder
 					{
 						if (!activeBidPrices.containsKey(item))
 						{
-							System.out.println(this.name + " adding item to activeBids: " + item.listingID());
 							activeBids.add(item);
 						}
 						else
@@ -112,19 +111,16 @@ public class ConservativeBidder implements Bidder
 			Hashtable<Item, Integer> newActiveBidPrices = new Hashtable<Item, Integer>();
 			for (Item bid : activeBids)
 			{
-				System.out.println(this.name + "calling server.checkBidStatus on item: " + bid.listingID());
 				switch (server.checkBidStatus(this.name(), bid.listingID()))
 				{
 				case 1:
 					// Success
-					System.out.println(this.name + "got SUCCESS from checkBidStatus: " + bid.listingID());
 					int finalPrice = activeBidPrices.get(bid);
 					int cashToPay = this.cash >= finalPrice ? finalPrice : this.cash;
 					
 					try {
 						String itemWon = server.payForItem(this.name(), bid.listingID(), cashToPay);
 					} catch (InsufficientFundsException e){
-						System.out.println(this.name() + " was unable to pay up and is retiring in disgrace.");
 						return;
 					}
 					this.cash -= cashToPay;

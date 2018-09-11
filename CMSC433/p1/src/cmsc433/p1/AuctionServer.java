@@ -341,24 +341,29 @@ public class AuctionServer
 			}
 
 			//At this point bidding is closed, so clean up for the item
-			//Remove it from all collections of active items
-			itemsUpForBidding.remove(checkItem);
 			//Find whoever sold this item and decrease their active auctions by 1
-			if (highestBidder != null) //This item has been bid on
+			String sellerName = itemsAndIDs.get(listingID).seller(); //Update the number of open bids the seller has
+			itemsPerSeller.put(sellerName, itemsPerSeller.get(sellerName) - 1);
+
+			//This item has already been bid on
+			//Check if the item has already been removed from bidding, if so no side effects
+			if (highestBidder != null) //This item has been bid on (if already removed from
 			{
 				itemsPerBuyer.put(highestBidder, itemsPerBuyer.get(highestBidder) - 1);
-				uncollectedRevenue += highestBids.get(listingID);
-				System.out.println(bidderName + ": ID:" + listingID + ": uncollectedRevenue increased to: " + uncollectedRevenue);
 
-				if (bidderName == highestBidder) //This bidder made the highest bid
+				//Only do this is the item has not yet been removed from the active bidding list
+				if (itemsUpForBidding.contains(checkItem))
+				{
+					uncollectedRevenue += highestBids.get(listingID);
+					itemsUpForBidding.remove(checkItem); //Be sure to actually remove it
+				}
+
+				if (bidderName.equals(highestBidder)) //This bidder made the highest bid
 					return SUCCESS;
 				else
 					return FAILURE;
 			}
-			else //This item has gone unbid
-			{
-				//Do Nothing?
-			}
+
 		}
 
 		//Should never reach this point
@@ -431,7 +436,6 @@ public class AuctionServer
 				if (amount >= highestBids.get(listingID)) //Sufficient funds to pay for the item
 				{
 					uncollectedRevenue -= highestBids.get(listingID); //uncollectedRevenue only accounts for highest bid
-					System.out.println(bidderName + ": ID:" + listingID + ": uncollectedRevenue decreased to: " + uncollectedRevenue);
 					revenue += amount; //revenue collects the total amount submitted by the buyer
 					soldItemsCount += 1; //1 more item is sold
 					itemsSold.add(listingID); //Item goes in the itemsSold list

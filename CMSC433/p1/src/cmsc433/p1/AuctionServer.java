@@ -273,13 +273,17 @@ public class AuctionServer
 					System.out.println(bidderName + ": Bidder already has highest bid");
 					return false;
 				}
-				else if (biddingAmount <= bidPrice)
+				else if (!itemUnbid(listingID) && biddingAmount <= bidPrice)
 				{
-					System.out.println(bidderName + ": Bid must be greater than current bid price");
+					System.out.println(bidderName + ": Subsequent bids must be greater than current bid price");
+				}
+				else if (itemUnbid(listingID) && biddingAmount < itemsAndIDs.get(listingID).lowestBiddingPrice())
+				{
+					System.out.println(bidderName + ": Initial bid must be greater than or equal to lowestBiddingPrice");
 				}
 				else //At this point bid should be valid
 				{
-					//System.out.println(bidderName + ": Bid successfully submitted at this point");
+					System.out.println(bidderName + ": Bid successfully submitted at this point");
 					//Decrement former highest bidder's bid count
 					String formerBidder = highestBidders.get(listingID);
 					if (formerBidder != null) //Have to check if this actually exists
@@ -450,9 +454,8 @@ public class AuctionServer
 					blacklist.add(bidderName);
 
 					//Remove buyer from list of highestBidders, it is as if the item was never bid upon in the first place (revert to opening price)
-					System.out.println("Values:");
-					System.out.println(highestBidders.values());
 					while (highestBidders.values().remove(bidderName)); //Should keep looping while values contains bidderName
+					highestBids.remove(listingID); //Remove item from highestBids: as if it was never bid on at all. itemUnbid() should now return true
 					throw new InsufficientFundsException();
 				}
 			}

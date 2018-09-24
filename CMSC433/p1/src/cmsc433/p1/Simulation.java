@@ -32,7 +32,7 @@ public class Simulation
         // Start the buyers
         for (int i=0; i<nrBidders; ++i)
         {
-            bidders[i] = new ConservativeBidder(
+            bidders[i] = new AggressiveBidder(
             		AuctionServer.getInstance(), 
             		"Buyer"+i, 
             		100, 20, 150, i

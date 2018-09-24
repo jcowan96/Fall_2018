@@ -183,6 +183,114 @@ public class ServerTestMulti
         testMultiThread(3, 200, 20);
     }
 
+    @Test
+    public void studentTest1() {
+        AuctionServer auctionServer = AuctionServer.getInstance();
+        assertTrue(auctionServer.itemUnbid(0));
+        assertTrue(auctionServer.submitItem("John", "food0", 50, 100) == 0);
+
+        assertTrue(auctionServer.submitBid("bidder1", 0, 55));
+        assertEquals(auctionServer.checkBidStatus("bidder1", 0), 2); //Open
+        while (auctionServer.checkBidStatus("bidder2", 0) == 2) {
+            //Do Nothing
+        }
+        assertEquals(auctionServer.checkBidStatus("bidder2", 0), 3); //Failure, not the right bidder
+        assertEquals(auctionServer.checkBidStatus("bidder1", 0), 1); //Success, bidder won auction
+        assertFalse(auctionServer.itemUnbid(0));
+
+        //Pay for item
+        try {
+            assertEquals(auctionServer.payForItem("bidder2", 0, 100), null);
+            assertEquals(auctionServer.payForItem("bidder1", 0, 56), "food0");
+        }
+        catch (InsufficientFundsException e) {
+            System.out.println("Insufficent funds, bidder blacklisted");
+        }
+
+        assertEquals(auctionServer.soldItemsCount(), 1);
+        assertEquals(auctionServer.uncollectedRevenue(), 0);
+        assertEquals(auctionServer.revenue(), 56);
+    }
+
+    @Test
+    public void testMaxSeller() {
+        AuctionServer auctionServer = AuctionServer.getInstance();
+
+        for (int i = 0; i < 100; i++) {
+            String itemName = "food" +i;
+            auctionServer.submitItem("seller1", itemName, i, 5000);
+        }
+
+        for (int i = 0; i < 100; i++) {
+            auctionServer.submitBid("bidder1", i, 50);
+        }
+    }
+
+    @Test
+    public void testRepeatedCalls() {
+        AuctionServer auctionServer = AuctionServer.getInstance();
+
+        for (int i = 0; i < 20; i++) {
+            String itemName = "food" +i;
+            auctionServer.submitItem("seller1", itemName, i, 5000);
+            auctionServer.submitBid("bidder1", i, 50);
+        }
+
+        for (int i = 0; i < 20; i++) {
+            int status = auctionServer.checkBidStatus("bidder1", i);
+            while (status == 2)
+                status = auctionServer.checkBidStatus("bidder1", i);
+        }
+    }
+
+    @Test
+    public void testBlacklist() {
+        AuctionServer auctionServer = AuctionServer.getInstance();
+
+        //Sell items
+        for (int i = 0; i < 10; i++) {
+            String itemName = "food" +i;
+            auctionServer.submitItem("seller1", itemName, i, 5000);
+        }
+
+        //Submit bids for them, make sure price changes when submitting
+        for (int i = 0; i < 10; i++) {
+            assertTrue(auctionServer.itemUnbid(i));
+            assertEquals(auctionServer.itemPrice(i), i);
+            auctionServer.submitBid("bidder1", i,50);
+            assertEquals(auctionServer.itemPrice(i), 50);
+        }
+
+        //check prices until the items are ready to be paid for
+        for (int i = 0; i < 10; i++) {
+            int status = auctionServer.checkBidStatus("bidder1", i);
+            while (status == 2)
+                status = auctionServer.checkBidStatus("bidder1", i);
+        }
+
+        for (int i = 0; i < 10; i++) {
+            try {
+                if (i == 4) {
+                    assertEquals(auctionServer.itemPrice(i), 50);
+                    auctionServer.payForItem("bidder1", i, 20); //Intentionally underpay, throw error
+                }
+                else {
+                    assertEquals(auctionServer.itemPrice(i), 50);
+                    auctionServer.payForItem("bidder1", i, 100);
+                }
+            }
+            catch (InsufficientFundsException e) {
+                System.out.println("BUYER HAS BEEN BLACKLISTED");
+                for (int x = 0; x < 4; x++)
+                    assertEquals(auctionServer.itemPrice(x), 50); //prices should be the same since these items were sold
+                for (int x = 4; x < 10; x++)
+                    assertEquals(auctionServer.itemPrice(x), x); //prices should all be reset to opening bid
+
+                break;
+            }
+        }
+    }
+
 
 
 

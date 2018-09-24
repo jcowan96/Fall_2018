@@ -164,8 +164,10 @@ public class AuctionServer
 			//Check if listing this item breaks server or seller capacity
 			if (itemsUpForBidding.size() >= serverCapacity) //Server is full, can't list any more items
 				return -1;
-			else if (sellerExists && itemsPerSeller.get(sellerName) >= maxSellerItems) //Seller has too many items up for bid
+			else if (sellerExists && itemsPerSeller.get(sellerName) >= maxSellerItems) { //Seller has too many items up for bid
+				System.out.println(sellerName + ": can't post any more auctions, have posted maxSellerItems");
 				return -1;
+			}
 
 			//Item can be added, create it and add it to the appropriate data structures
 			lastListingID += 1; //Increment this when a new object is added
@@ -240,7 +242,6 @@ public class AuctionServer
 
 			//See if bid is invalid based on item's existence or auction rules
 			Item itemInQuestion = itemsAndIDs.get(listingID);
-			//System.out.println("ListingID: " + listingID + ": " + itemsUpForBidding.contains(itemInQuestion));
 			if (!itemsUpForBidding.contains(itemInQuestion)) //Check if item exists and can be bid upon
 			{
 				System.out.println(bidderName + ": Item is not available for bidding");
@@ -328,8 +329,10 @@ public class AuctionServer
 
 		synchronized(instanceLock) //Lock to make sure bid status doesn't change when checking it
 		{
-			if (!itemsAndIDs.containsKey(listingID)) //The given ID doesn't match an actual item in the auction server
+			if (!itemsAndIDs.containsKey(listingID)) { //The given ID doesn't match an actual item in the auction server
+				System.out.println("checkBidStatus FAILURE, ID does not match an actual item");
 				return FAILURE;
+			}
 
 			Item checkItem = itemsAndIDs.get(listingID);
 			String highestBidder; //Keep reference to who the highest bidder is currently; if no bids, null
@@ -340,14 +343,16 @@ public class AuctionServer
 
 			synchronized(checkItem) //Lock on item to make sure no other threads can modify it
 			{
-				if (checkItem.biddingOpen()) //If the item is still up for bid, return OPEN and do nothing else
+				if (checkItem.biddingOpen()) { //If the item is still up for bid, return OPEN and do nothing else
+					System.out.println("checkBidStatus returning OPEN");
 					return OPEN;
+				}
 			}
 
 			//At this point bidding is closed, so clean up for the item
 			//Find whoever sold this item and decrease their active auctions by 1
 			String sellerName = itemsAndIDs.get(listingID).seller(); //Update the number of open bids the seller has
-			itemsPerSeller.put(sellerName, itemsPerSeller.get(sellerName) - 1);
+			itemsPerSeller.put(sellerName, itemsPerSeller.get(sellerName) - 1); //Update number of active items per seller
 
 			//This item has already been bid on
 			//Check if the item has already been removed from bidding, if so no side effects
@@ -362,15 +367,20 @@ public class AuctionServer
 					itemsUpForBidding.remove(checkItem); //Be sure to actually remove it
 				}
 
-				if (bidderName.equals(highestBidder)) //This bidder made the highest bid
+				if (bidderName.equals(highestBidder)) { //This bidder made the highest bid
+					System.out.println("checkBidStatus SUCCESS, this bidder made the winning bid");
 					return SUCCESS;
-				else
+				}
+				else {
+					System.out.println("checkBidStatus FAILURE, this bidder did not make the winning bid");
 					return FAILURE;
+				}
 			}
 
 		}
 
-		//Should never reach this point
+		//Reach this point if the item has not been bid on, should fail by default
+		System.out.println("checkBidStatus FAILURE, this item was never bid on");
 		return FAILURE;
 	}
 
@@ -448,14 +458,24 @@ public class AuctionServer
 				}
 				else //Insufficient funds to pay for item, cancel outstanding bids and blacklist seller
 				{
+					System.out.println("[AUCTION SERVER]: BUYER HAS BEEN BLACKLISTED");
 					//Server gets no profit and the item is not considered sold
 					//Cancel all outstanding bids, blacklist buyer
 					itemsPerBuyer.put(bidderName, 0);
 					blacklist.add(bidderName);
 
-					//Remove buyer from list of highestBidders, it is as if the item was never bid upon in the first place (revert to opening price)
+					//Reset highestBids and highestBidders only for currently active items
+					for (int ID : itemsAndIDs.keySet()) { //Pick from all items
+						//If the current bidder is the highestBidder for this item, remove it from
+						//highestBidders and highestBids (as if it was never bid on)
+						if (!itemsSold.contains(ID)) { //If item has not been sold yet, remove it from highestBidders and highestBids
+							if (highestBidders.get(ID).equals(bidderName)) {
+								highestBidders.remove(ID);
+								highestBids.remove(ID);
+							}
+						}
+					}
 					while (highestBidders.values().remove(bidderName)); //Should keep looping while values contains bidderName
-					highestBids.remove(listingID); //Remove item from highestBids: as if it was never bid on at all. itemUnbid() should now return true
 					throw new InsufficientFundsException();
 				}
 			}

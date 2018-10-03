@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
+import java.util.Queue;
 
 /**
  * Simulation is the main class used to run the simulation.  You may
@@ -12,7 +13,18 @@ import java.util.Random;
  */
 public class Simulation {
 	// List to track simulation events during simulation
-	public static List<SimulationEvent> events;  
+	public static List<SimulationEvent> events;
+	public static Queue<Object> tables;
+	public static Queue<Order> orders;
+
+	//Expose numTables to outside classes
+	public static int maxTables;
+
+	//Exactly 4 static machines to be accessed by Cooks
+	public static Machine fryer;
+	public static Machine oven;
+	public static Machine grillPress;
+	public static Machine fountain;
 
 	/**
 	 * Used by other classes in the simulation to log events
@@ -66,14 +78,28 @@ public class Simulation {
 
 
 		// Set things up you might need
-
+		// Maybe a queue of tables and getting size to find tables currently in use
+		// Data structure for placed orders by Customers, read by Cooks
+		maxTables = numTables;
+		tables = new LinkedList<Object>();
+		orders = new LinkedList<Order>();
 
 		// Start up machines
-
+		// 1 machine for each food type, and all machines have same capacity as defined by simulation
+		fryer = new Machine(Machine.MachineType.fryer, FoodType.wings, machineCapacity);
+		oven = new Machine(Machine.MachineType.oven, FoodType.pizza, machineCapacity);
+		grillPress = new Machine(Machine.MachineType.grillPress, FoodType.sub, machineCapacity);
+		fountain = new Machine(Machine.MachineType.fountain, FoodType.soda, machineCapacity);
 
 
 		// Let cooks in
 		Thread[] cooks = new Thread[numCooks];
+		for (int i = 0; i < numCooks; i++) {
+			cooks[i] = new Thread(
+					new Cook("Cook " + (i))
+					);
+			cooks[i].start(); //Start cooks up right away, they're on infinite loops
+		}
 
 		// Build the customers.
 		Thread[] customers = new Thread[numCustomers];
@@ -132,7 +158,8 @@ public class Simulation {
 		try {
 			// Wait for customers to finish
 			//   -- you need to add some code here...
-			
+			for (int i = 0; i < customers.length; i++)
+				customers[i].join();
 			
 			
 			

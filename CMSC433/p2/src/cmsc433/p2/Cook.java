@@ -41,8 +41,38 @@ public class Cook implements Runnable {
 		Simulation.logEvent(SimulationEvent.cookStarting(this));
 		try {
 			while(true) {
-				//YOUR CODE GOES HERE...
-				throw new InterruptedException(); // REMOVE THIS
+				//First, poll an order from the orders queue
+				Order currentOrder;
+				synchronized(Simulation.orders) {
+					currentOrder = Simulation.orders.poll(); //TODO: Synchronize this definitely
+				}
+				Simulation.logEvent(SimulationEvent.cookReceivedOrder(this, currentOrder.food, currentOrder.orderNumber));
+
+				//Next, send each item off to a machine
+				//TODO: was tired when i wrote this so make sure it actually makes sense
+				for (int i = 0; i < currentOrder.food.size(); i++) {
+					switch (currentOrder.food.get(i).name)
+					{
+						case "wings":
+							Simulation.fryer.makeFood(currentOrder.food.get(i));
+							break;
+						case "pizza":
+							Simulation.oven.makeFood(currentOrder.food.get(i));
+							break;
+						case "sub":
+							Simulation.grillPress.makeFood(currentOrder.food.get(i));
+							break;
+						case "soda":
+							Simulation.fountain.makeFood(currentOrder.food.get(i));
+							break;
+					}
+				}
+				//TODO: Do more stuff here
+
+				//TODO: Finish doing more stuff here
+				Simulation.logEvent(SimulationEvent.cookCompletedOrder(this, currentOrder.orderNumber));
+				currentOrder.notify();
+				throw new InterruptedException(); //TODO: REMOVE THIS
 			}
 		}
 		catch(InterruptedException e) {
@@ -51,6 +81,25 @@ public class Cook implements Runnable {
 			// You might need to change this if you change how things are
 			// done in the Simulation class.
 			Simulation.logEvent(SimulationEvent.cookEnding(this));
+		}
+	}
+
+	private void sendToMachine(Food food) {
+		switch (food.name)
+		{
+			case "wings":
+				Simulation.fryer.makeFood(food);
+				break;
+			case "pizza":
+				Simulation.oven.makeFood(food);
+				break;
+			case "sub":
+				Simulation.grillPress.makeFood(food);
+				break;
+			case "soda":
+				Simulation.fountain.makeFood(food);
+				break;
+
 		}
 	}
 }

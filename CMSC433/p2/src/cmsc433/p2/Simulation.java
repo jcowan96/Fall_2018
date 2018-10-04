@@ -221,8 +221,8 @@ public class Simulation {
 		int machineCapacity = new Integer(args[3]).intValue();
 		boolean randomOrders = new Boolean(args[4]);
 		 */
-		int numCustomers = 1;
-		int numCooks =1;
+		int numCustomers = 10;
+		int numCooks = 3;
 		int numTables = 5;
 		int machineCapacity = 4;
 		boolean randomOrders = false;

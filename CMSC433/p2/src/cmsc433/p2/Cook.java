@@ -43,12 +43,13 @@ public class Cook implements Runnable {
 		try {
 			while(true) {
 				//First, poll an order from the orders queue
-				if (Simulation.orders.peek() != null) {
-					//Synchronize on orders to make sure you can actually grab the element
-					synchronized (Simulation.orders) {
-						System.out.println("Cook poll() order here");
-						currentOrder = Simulation.orders.poll();
-					}
+				//Synchronize on orders to make sure you can actually grab the element
+				synchronized (Simulation.orders) {
+					currentOrder = Simulation.orders.poll();
+				}
+				//Gotta check if you actually got an order, otherwise just continue
+				if (currentOrder != null) {
+					System.out.println("Cook poll() order here");
 					Simulation.logEvent(SimulationEvent.cookReceivedOrder(this, currentOrder.food, currentOrder.orderNumber));
 
 					//Next, send each item off to the appropriate machine
@@ -65,15 +66,13 @@ public class Cook implements Runnable {
 						currentOrder.notify();
 					}
 				}
-				else {
-					//If there are no orders in the queue, just continue busy-waiting until there is one
-				}
 				//Check to see when Cook gets interrupted: if so, break out of the while loop
 				if (Thread.interrupted()) {
 					System.out.println("[Cook] has been interrupted");
 					break;
 				}
 			}
+
 		}
 		catch(InterruptedException e) {
 			System.out.println("[Cook] InterruptedException here");

@@ -100,6 +100,7 @@ public class Simulation {
 					);
 			cooks[i].start(); //Start cooks up right away, they're on infinite loops
 		}
+		System.out.println("[Simulation] all cooks started");
 
 		// Build the customers.
 		Thread[] customers = new Thread[numCustomers];
@@ -154,13 +155,16 @@ public class Simulation {
 			//      table...
 		}
 
+		System.out.println("[Simulation] all customers started");
+
 
 		try {
 			// Wait for customers to finish
 			//   -- you need to add some code here...
 			for (int i = 0; i < customers.length; i++)
 				customers[i].join();
-			
+
+			System.out.println("[Simulation] all customers joined");
 			
 			
 			
@@ -169,18 +173,22 @@ public class Simulation {
 			// The easiest way to do this might be the following, where
 			// we interrupt their threads.  There are other approaches
 			// though, so you can change this if you want to.
-			for(int i = 0; i < cooks.length; i++)
+			for(int i = 0; i < cooks.length; i++) {
 				cooks[i].interrupt();
-			for(int i = 0; i < cooks.length; i++)
+			}
+			for(int i = 0; i < cooks.length; i++) {
 				cooks[i].join();
-
+			}
 		}
 		catch(InterruptedException e) {
 			System.out.println("Simulation thread interrupted.");
 		}
 
 		// Shut down machines
-
+		logEvent(SimulationEvent.machineEnding(fryer));
+		logEvent(SimulationEvent.machineEnding(oven));
+		logEvent(SimulationEvent.machineEnding(grillPress));
+		logEvent(SimulationEvent.machineEnding(fountain));
 
 
 
@@ -213,7 +221,7 @@ public class Simulation {
 		int machineCapacity = new Integer(args[3]).intValue();
 		boolean randomOrders = new Boolean(args[4]);
 		 */
-		int numCustomers = 10;
+		int numCustomers = 1;
 		int numCooks =1;
 		int numTables = 5;
 		int machineCapacity = 4;

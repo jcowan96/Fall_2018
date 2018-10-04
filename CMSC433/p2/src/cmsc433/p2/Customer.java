@@ -17,6 +17,9 @@ public class Customer implements Runnable {
 	
 	private static int runningCounter = 0;
 
+	//Global non-static boolean to determine if the customer has entered Ratsie's
+	private boolean hasEntered = false;
+
 	/**
 	 * You can feel free modify this constructor.  It must take at
 	 * least the name and order but may take other parameters if you
@@ -41,33 +44,26 @@ public class Customer implements Runnable {
 	public void run() {
 		Simulation.logEvent(SimulationEvent.customerStarting(this));
 		//Attempt to enter the restaurant, can only do so if not all tables are full
-		//Dont need to synchronize because reading size does not modify state
-		while (Simulation.tables.size() >= Simulation.maxTables) {
-			try {
-				Thread.sleep(10); //Wait 10ms for a table to become available
-			}
-			catch (InterruptedException e) {
-				//This should never happen, Customers will not be interrupted
-				e.printStackTrace();
-			}
+		while (!hasEntered) {
+			attemptToEnterRatsies();
 		}	//Customer has now entered the restaurant
 
-		//TODO: Synchronize this definitely
-		synchronized(Simulation.tables) {
-			Simulation.tables.add(new Object()); //Represents 1 filled table while customer is inside
-		}
-		Simulation.logEvent(SimulationEvent.customerEnteredRatsies(this));
+
 
 		//Place an order here
 		Simulation.logEvent(SimulationEvent.customerPlacedOrder(this, order, orderNum));
 		Order placeOrder = new Order(order, orderNum); //Create new order object
 		synchronized(Simulation.orders) {
-			Simulation.orders.add(placeOrder); //TODO: Synchronize this definitely
+			Simulation.orders.add(placeOrder);
+			System.out.println("Placed order: " + Simulation.orders);
 		}
 
 		//After the order is placed, wait() until notified that the order is ready
 		try {
-			placeOrder.wait(); //wait on the order object, will be released by Cook
+			//Have to synchronize on object in order to wait()
+			synchronized(placeOrder) {
+				placeOrder.wait(); //wait on the order object, will be released by Cook
+			}
 		}
 		catch (InterruptedException e) {
 			//This should never happen, Customers will not be interrupted
@@ -81,7 +77,22 @@ public class Customer implements Runnable {
 		//TODO: Synchronize this definitely
 		synchronized(Simulation.tables) {
 			Simulation.tables.poll(); //Remove 1 object from tables to represent a free table
+			System.out.println("[Customer] left: " + Simulation.tables.size() + " / " + Simulation.maxTables + " tables are now full");
 		}
 		Simulation.logEvent(SimulationEvent.customerLeavingRatsies(this));
+	}
+
+	//Checks if there is room at Ratsies to get a table, and allows the Customer
+	//to enter in a synchronized way
+	public void attemptToEnterRatsies() {
+		synchronized(Simulation.tables) {
+			if (Simulation.tables.size() < Simulation.maxTables) {
+				Simulation.tables.add(new Object());
+				System.out.println("[Customer] entered: " + Simulation.tables.size() + " / " + Simulation.maxTables + " tables are now full");
+				Simulation.logEvent(SimulationEvent.customerEnteredRatsies(this));
+				//Make sure to set global boolean
+				hasEntered = true;
+			}
+		}
 	}
 }

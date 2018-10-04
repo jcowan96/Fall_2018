@@ -49,10 +49,33 @@ public class Validate {
 				Eater should not place more than one order
 				Cook should not work on order before it is placed
 			 */
+			check(enteredEqualsLeaving(events),
+					"Number of customers entering must match number leaving");
 
 			return true;
 		} catch (InvalidSimulationException e) {
 			return false;
 		}
+	}
+
+	//Make sure each customer who enters also exits,
+	//and each customer who orders receives their order
+	private static boolean enteredEqualsLeaving(List<SimulationEvent> events) {
+		int entered = 0;
+		int leaving = 0;
+		int placed = 0;
+		int received = 0;
+		for (int i = 0; i < events.size(); i++) {
+			if (events.get(0).event == SimulationEvent.EventType.CustomerEnteredRatsies)
+				entered = entered+1;
+			if (events.get(0).event == SimulationEvent.EventType.CustomerLeavingRatsies)
+				leaving = leaving+1;
+			if (events.get(0).event == SimulationEvent.EventType.CustomerPlacedOrder)
+				placed = placed+1;
+			if (events.get(0).event == SimulationEvent.EventType.CustomerReceivedOrder)
+				received = received+1;
+		}
+
+		return entered == leaving && placed == received;
 	}
 }

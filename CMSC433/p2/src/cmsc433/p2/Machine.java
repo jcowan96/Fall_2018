@@ -79,13 +79,17 @@ public class Machine {
 			foodInMachine.add(food);
 			Simulation.logEvent(SimulationEvent.machineCookingFood(this, food));
 
-
-			//TODO: This is all wrong, needs fixing (maybe)
 			//Start thread working on cooking food
 			Thread worker = new Thread(new CookAnItem(food));
 			worker.start();
-			food.wait(); //wait on result of thread
-
+			//wait on result of thread cooking food
+			synchronized(food) {
+				food.wait();
+			}
+			//Notified at this point, remove the object from machine
+			//Also log that the food has been completed
+			foodInMachine.remove(0);
+			Simulation.logEvent(SimulationEvent.machineDoneFood(this, food));
 			//TODO: Signal to Cook somehow that their food is ready
 		}
 		//YOUR CODE GOES HERE...
@@ -104,7 +108,10 @@ public class Machine {
 			try {
 				//Sleep for the amount of time that this food requires
 				Thread.sleep(foodCooking.cookTimeS);
-				foodCooking.notify(); //Notify Machine that food has finished cooking
+				synchronized(foodCooking) {
+					foodCooking.notify();
+				}
+
 			}
 			catch(InterruptedException e) {
 				//Come here if thread gets interrupted while executing
@@ -115,6 +122,13 @@ public class Machine {
 
 	//Returns true if there is room for more food in the machine
 	private boolean atCapacity() {
-		return foodInMachine.size() < this.capacity;
+		if (foodInMachine.size() >= this.capacity) {
+			System.out.println(toString() + ": is at capacity");
+			return true;
+		}
+		else {
+			System.out.println(toString() + ": is not at capacity");
+			return false;
+		}
 	}
 }

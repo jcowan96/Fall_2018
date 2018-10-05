@@ -35,8 +35,6 @@ public class Machine {
 	public final int capacity;
 
 	//YOUR CODE GOES HERE...
-	//ArrayList to represent food in the oven
-	ArrayList<Food> foodInMachine;
 
 	/**
 	 * The constructor takes at least the type of the machine,
@@ -52,8 +50,6 @@ public class Machine {
 		this.capacity = capacityIn;
 		
 		//YOUR CODE GOES HERE...
-		//Initialize foodInMachine
-		foodInMachine = new ArrayList<Food>();
 		//Log on starting machine
 		Simulation.logEvent(SimulationEvent.machineStarting(this, food, capacityIn));
 	}
@@ -68,31 +64,21 @@ public class Machine {
 	 * notify the calling Cook when the food item is finished.
 	 */
 	public Object makeFood(Food food) throws InterruptedException {
-		if (atCapacity()) {
-			//Block if machine is at full capacity
-			//Sleep for 20ms, then recur to try again and see if some room has been made available
-			Thread.sleep(20);
-			return makeFood(food);
-		}
-		else {
-			//Add food to internal storage and log
-			foodInMachine.add(food);
-			Simulation.logEvent(SimulationEvent.machineCookingFood(this, food));
+		//Log that machine has started cooking food
+		Simulation.logEvent(SimulationEvent.machineCookingFood(this, food));
 
-			//Start thread working on cooking food
-			Thread worker = new Thread(new CookAnItem(food));
-			worker.start();
-			//wait on result of thread cooking food
-			synchronized(food) {
-				food.wait();
-			}
-			//Notified at this point, remove the object from machine
-			//Also log that the food has been completed
-			foodInMachine.remove(0);
-			Simulation.logEvent(SimulationEvent.machineDoneFood(this, food));
-			//TODO: Signal to Cook somehow that their food is ready
+		//Start thread working on cooking food
+		Thread worker = new Thread(new CookAnItem(food));
+		worker.start();
+		//wait on result of thread cooking food
+		synchronized(food) {
+			food.wait();
 		}
-		//YOUR CODE GOES HERE...
+		//Notified at this point, log that food has been completed
+		//Also log that the food has been completed
+		Simulation.logEvent(SimulationEvent.machineDoneFood(this, food));
+		//TODO: Signal to Cook somehow that their food is ready
+		// YOUR CODE GOES HERE...
 		return new Object();
 	}
 
@@ -117,18 +103,6 @@ public class Machine {
 				//Come here if thread gets interrupted while executing
 				e.printStackTrace();
 			}
-		}
-	}
-
-	//Returns true if there is room for more food in the machine
-	private boolean atCapacity() {
-		if (foodInMachine.size() >= this.capacity) {
-			System.out.println(toString() + ": is at capacity");
-			return true;
-		}
-		else {
-			System.out.println(toString() + ": is not at capacity");
-			return false;
 		}
 	}
 }

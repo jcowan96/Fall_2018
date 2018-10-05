@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.Queue;
 
+import java.util.concurrent.Semaphore;
+
 /**
  * Simulation is the main class used to run the simulation.  You may
  * add any fields (static or instance) or any methods you wish.
@@ -25,6 +27,12 @@ public class Simulation {
 	public static Machine oven;
 	public static Machine grillPress;
 	public static Machine fountain;
+
+	//Static semaphores to represent access to Machines
+	public static Semaphore fryerSem;
+	public static Semaphore ovenSem;
+	public static Semaphore grillPressSem;
+	public static Semaphore fountainSem;
 
 	/**
 	 * Used by other classes in the simulation to log events
@@ -78,11 +86,9 @@ public class Simulation {
 
 
 		// Set things up you might need
-		// Maybe a queue of tables and getting size to find tables currently in use
-		// Data structure for placed orders by Customers, read by Cooks
-		maxTables = numTables;
-		tables = new LinkedList<Object>();
-		orders = new LinkedList<Order>();
+		maxTables = numTables; //Exposes max table capacity to Customers
+		tables = new LinkedList<Object>(); //Represents tables currently filled in the restaraunt
+		orders = new LinkedList<Order>(); //List of submitted orders not being worked on by cooks
 
 		// Start up machines
 		// 1 machine for each food type, and all machines have same capacity as defined by simulation
@@ -90,6 +96,12 @@ public class Simulation {
 		oven = new Machine(Machine.MachineType.oven, FoodType.pizza, machineCapacity);
 		grillPress = new Machine(Machine.MachineType.grillPress, FoodType.sub, machineCapacity);
 		fountain = new Machine(Machine.MachineType.fountain, FoodType.soda, machineCapacity);
+
+		//Initialize Machine semaphores with permits equal to the Machines' capacity
+		fryerSem = new Semaphore(machineCapacity);
+		ovenSem = new Semaphore(machineCapacity);
+		grillPressSem = new Semaphore(machineCapacity);
+		fountainSem = new Semaphore(machineCapacity);
 
 
 		// Let cooks in
@@ -100,7 +112,6 @@ public class Simulation {
 					);
 			cooks[i].start(); //Start cooks up right away, they're on infinite loops
 		}
-		System.out.println("[Simulation] all cooks started");
 
 		// Build the customers.
 		Thread[] customers = new Thread[numCustomers];
@@ -155,7 +166,6 @@ public class Simulation {
 			//      table...
 		}
 
-		System.out.println("[Simulation] all customers started");
 
 
 		try {
@@ -164,7 +174,6 @@ public class Simulation {
 			for (int i = 0; i < customers.length; i++)
 				customers[i].join();
 
-			System.out.println("[Simulation] all customers joined");
 			
 			
 			
@@ -221,11 +230,11 @@ public class Simulation {
 		int machineCapacity = new Integer(args[3]).intValue();
 		boolean randomOrders = new Boolean(args[4]);
 		 */
-		int numCustomers = 10;
-		int numCooks = 3;
-		int numTables = 5;
+		int numCustomers = 5;
+		int numCooks = 2;
+		int numTables = 12;
 		int machineCapacity = 4;
-		boolean randomOrders = false;
+		boolean randomOrders = true;
 
 
 		// Run the simulation and then 

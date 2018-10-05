@@ -78,4 +78,14 @@ public class Validate {
 
 		return entered == leaving && placed == received;
 	}
+
+	//Returns true if the restaraunt ever had more people in tables than were available
+	public static boolean restarauntOverCapacity() {
+		return false;
+	}
+
+	//Returns true if a machine ever had more pieces of food inside it than machine capacity dictates
+	public static boolean machineOverCapacity() {
+		return false;
+	}
 }

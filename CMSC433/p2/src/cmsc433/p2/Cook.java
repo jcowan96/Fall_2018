@@ -49,18 +49,14 @@ public class Cook implements Runnable {
 				}
 				//Gotta check if you actually got an order, otherwise just continue
 				if (currentOrder != null) {
-					System.out.println("Cook poll() order here");
 					Simulation.logEvent(SimulationEvent.cookReceivedOrder(this, currentOrder.food, currentOrder.orderNumber));
 
 					//Next, send each item off to the appropriate machine
 					for (int i = 0; i < currentOrder.food.size(); i++) {
-						System.out.println(currentOrder.food.get(i));
+						System.out.println("calling sendToMachine");
 						sendToMachine(currentOrder.food.get(i));
-						System.out.println("[Cook] sent to machine");
 					}
-					//TODO: Do more stuff here
 
-					//TODO: Finish doing more stuff here
 					Simulation.logEvent(SimulationEvent.cookCompletedOrder(this, currentOrder.orderNumber));
 					synchronized (currentOrder) {
 						currentOrder.notify();
@@ -68,14 +64,14 @@ public class Cook implements Runnable {
 				}
 				//Check to see when Cook gets interrupted: if so, break out of the while loop
 				if (Thread.interrupted()) {
-					System.out.println("[Cook] has been interrupted");
+					//System.out.println(toString() + ": has been interrupted");
 					break;
 				}
 			}
 
 		}
 		catch(InterruptedException e) {
-			System.out.println("[Cook] InterruptedException here");
+			//System.out.println(toString() + ": InterruptedException here");
 			// This code assumes the provided code in the Simulation class
 			// that interrupts each cook thread when all customers are done.
 			// You might need to change this if you change how things are
@@ -88,20 +84,36 @@ public class Cook implements Runnable {
 		switch(food.name)
 		{
 			case "wings":
-				System.out.println("[Cook] Sending order to fryer");
+				//System.out.println(toString() + ": Waiting for permit for fryer");
+				Simulation.fryerSem.acquire();
+				//System.out.println(toString() + ": Acquired permit for fryer");
 				Simulation.fryer.makeFood(food);
+				Simulation.fryerSem.release();
+				//System.out.println(toString() + ": Released permit for fryer");
 				break;
 			case "pizza":
-				System.out.println("[Cook] Sending order to oven");
+				//System.out.println(toString() + ": Waiting for permit for oven");
+				Simulation.ovenSem.acquire();
+				//System.out.println(toString() + ": Acquired permit for oven");
 				Simulation.oven.makeFood(food);
+				Simulation.ovenSem.release();
+				//System.out.println(toString() + ": Released permit for oven");
 				break;
 			case "sub":
-				System.out.println("[Cook] Sending order to grillPress");
+				//System.out.println(toString() + ": Waiting for permit for grill press");
+				Simulation.grillPressSem.acquire();
+				//System.out.println(toString() + ": Acquired permit for grillPress");
 				Simulation.grillPress.makeFood(food);
+				Simulation.grillPressSem.release();
+				//System.out.println(toString() + ": Released permit for grillPress");
 				break;
 			case "soda":
-				System.out.println("[Cook] Sending order to fountain");
+				//System.out.println(toString() + ": Waiting for permit for fountain");
+				Simulation.fountainSem.acquire();
+				//System.out.println(toString() + ": Acquired permit for fountain");
 				Simulation.fountain.makeFood(food);
+				Simulation.fountainSem.release();
+				//System.out.println(toString() + ": Released permit for fountain");
 				break;
 		}
 	}

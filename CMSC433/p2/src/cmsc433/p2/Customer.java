@@ -55,7 +55,7 @@ public class Customer implements Runnable {
 		Order placeOrder = new Order(order, orderNum); //Create new order object
 		synchronized(Simulation.orders) {
 			Simulation.orders.add(placeOrder);
-			System.out.println("Placed order: " + Simulation.orders);
+			//System.out.println(toString() + " Placed order: " + Simulation.orders);
 		}
 
 		//After the order is placed, wait() until notified that the order is ready
@@ -74,10 +74,10 @@ public class Customer implements Runnable {
 		//Order should have been removed from orders list by Cook processing it
 		Simulation.logEvent(SimulationEvent.customerReceivedOrder(this, order, orderNum));
 
-		//TODO: Synchronize this definitely
+		//Synchronize leaving the restraunt, freeing up space for another customer to enter
 		synchronized(Simulation.tables) {
 			Simulation.tables.poll(); //Remove 1 object from tables to represent a free table
-			System.out.println("[Customer] left: " + Simulation.tables.size() + " / " + Simulation.maxTables + " tables are now full");
+			//System.out.println(toString() + " left: " + Simulation.tables.size() + " / " + Simulation.maxTables + " tables are now full");
 		}
 		Simulation.logEvent(SimulationEvent.customerLeavingRatsies(this));
 	}
@@ -88,8 +88,8 @@ public class Customer implements Runnable {
 		synchronized(Simulation.tables) {
 			if (Simulation.tables.size() < Simulation.maxTables) {
 				Simulation.tables.add(new Object());
-				System.out.println("[Customer] entered: " + Simulation.tables.size() + " / " + Simulation.maxTables + " tables are now full");
 				Simulation.logEvent(SimulationEvent.customerEnteredRatsies(this));
+				//System.out.println(toString() + " entered: " + Simulation.tables.size() + " / " + Simulation.maxTables + " tables are now full");
 				//Make sure to set global boolean
 				hasEntered = true;
 			}

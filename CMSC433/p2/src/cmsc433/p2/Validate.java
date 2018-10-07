@@ -51,6 +51,14 @@ public class Validate {
 			 */
 			check(enteredEqualsLeaving(events),
 					"Number of customers entering must match number leaving");
+			check(!restarauntOverCapacity(events),
+					"More customers than tables");
+			check(machinesStartAndShutdown(events),
+					"Not all machines start or shutdown");
+			check(cooksStartAndLeave(events),
+					"Number of cooks starting and leaving is not equal");
+			check (dontExceedMachineCapacity(events),
+					"A machine exceeded its capacity");
 
 			return true;
 		} catch (InvalidSimulationException e) {
@@ -66,13 +74,13 @@ public class Validate {
 		int placed = 0;
 		int received = 0;
 		for (int i = 0; i < events.size(); i++) {
-			if (events.get(0).event == SimulationEvent.EventType.CustomerEnteredRatsies)
+			if (events.get(i).event == SimulationEvent.EventType.CustomerEnteredRatsies)
 				entered = entered+1;
-			if (events.get(0).event == SimulationEvent.EventType.CustomerLeavingRatsies)
+			if (events.get(i).event == SimulationEvent.EventType.CustomerLeavingRatsies)
 				leaving = leaving+1;
-			if (events.get(0).event == SimulationEvent.EventType.CustomerPlacedOrder)
+			if (events.get(i).event == SimulationEvent.EventType.CustomerPlacedOrder)
 				placed = placed+1;
-			if (events.get(0).event == SimulationEvent.EventType.CustomerReceivedOrder)
+			if (events.get(i).event == SimulationEvent.EventType.CustomerReceivedOrder)
 				received = received+1;
 		}
 
@@ -80,12 +88,120 @@ public class Validate {
 	}
 
 	//Returns true if the restaraunt ever had more people in tables than were available
-	public static boolean restarauntOverCapacity() {
+	public static boolean restarauntOverCapacity(List<SimulationEvent> events) {
+		int custTotal = 0;
+		for (int i = 0; i < events.size(); i++) {
+			if (events.get(i).event == SimulationEvent.EventType.CustomerEnteredRatsies) {
+				custTotal = custTotal + 1;
+				if (custTotal > Simulation.maxTables)
+					return true; //Over capacity
+			}
+			if (events.get(i).event == SimulationEvent.EventType.CustomerLeavingRatsies)
+				custTotal = custTotal - 1;
+		}
 		return false;
 	}
 
-	//Returns true if a machine ever had more pieces of food inside it than machine capacity dictates
-	public static boolean machineOverCapacity() {
-		return false;
+	public static boolean machinesStartAndShutdown(List<SimulationEvent> events) {
+		int machineStart = 0;
+		int machineShutdown = 0;
+		int machineCooking = 0;
+		int machineDone = 0;
+
+		for (int i = 0; i < events.size(); i++) {
+			if (events.get(i).event == SimulationEvent.EventType.MachineStarting)
+				machineStart = machineStart + 1;
+			if (events.get(i).event == SimulationEvent.EventType.MachineEnding)
+				machineShutdown = machineShutdown + 1;
+			if (events.get(i).event == SimulationEvent.EventType.MachineStartingFood)
+				machineCooking = machineCooking + 1;
+			if (events.get(i).event == SimulationEvent.EventType.MachineDoneFood)
+				machineDone = machineDone + 1;
+		}
+
+		return machineStart == 4 && machineShutdown == 4 && machineCooking == machineDone;
+	}
+
+	//Make sure cooks have equal and opposite actions
+	public static boolean cooksStartAndLeave(List<SimulationEvent> events) {
+		int cookStart = 0;
+		int cookShutdown = 0;
+		int cookReceiveOrder = 0;
+		int cookCompleteOrder = 0;
+		int cookStartFood = 0;
+		int cookFinishFood = 0;
+
+		for (int i = 0; i < events.size(); i++) {
+			if (events.get(i).event == SimulationEvent.EventType.CookStarting)
+				cookStart = cookStart + 1;
+			if (events.get(i).event == SimulationEvent.EventType.CookEnding)
+				cookShutdown = cookShutdown + 1;
+			if (events.get(i).event == SimulationEvent.EventType.CookReceivedOrder)
+				cookReceiveOrder = cookReceiveOrder + 1;
+			if (events.get(i).event == SimulationEvent.EventType.CookCompletedOrder)
+				cookCompleteOrder = cookCompleteOrder + 1;
+			if (events.get(i).event == SimulationEvent.EventType.CookStartedFood)
+				cookStartFood = cookStartFood + 1;
+			if (events.get(i).event == SimulationEvent.EventType.CookFinishedFood)
+				cookFinishFood = cookFinishFood + 1;
+		}
+
+		return cookStart == cookShutdown && cookReceiveOrder == cookCompleteOrder && cookStartFood == cookFinishFood;
+	}
+
+	public static boolean dontExceedMachineCapacity(List<SimulationEvent> events) {
+		int capacity = events.get(1).machine.getCapacity();
+		int fryer = 0;
+		int oven = 0;
+		int grillPress = 0;
+		int fountain = 0;
+
+		for (int i = 0; i < events.size(); i++) {
+			if (events.get(i).event == SimulationEvent.EventType.MachineStartingFood) {
+				switch (events.get(i).machine.machineType)
+				{
+					case fryer:
+						fryer = fryer + 1;
+						if (fryer > capacity)
+							return false;
+						break;
+					case oven:
+						oven = oven + 1;
+						if (oven > capacity)
+							return false;
+						break;
+					case grillPress:
+						grillPress = grillPress + 1;
+						if (grillPress > capacity)
+							return false;
+						break;
+					case fountain:
+						fountain = fountain + 1;
+						if (fountain > capacity)
+							return false;
+						break;
+				}
+			}
+			if (events.get(i).event == SimulationEvent.EventType.MachineDoneFood) {
+				switch (events.get(i).machine.machineType)
+				{
+					case fryer:
+						fryer = fryer - 1;
+						break;
+					case oven:
+						oven = oven - 1;
+						break;
+					case grillPress:
+						grillPress = grillPress - 1;
+						break;
+					case fountain:
+						fountain = fountain - 1;
+						break;
+				}
+			}
+
+		}
+
+		return true;
 	}
 }

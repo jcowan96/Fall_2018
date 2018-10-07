@@ -1,7 +1,5 @@
 package cmsc433.p2;
 
-import java.util.ArrayList;
-
 /**
  * A Machine is used to make a particular Food.  Each Machine makes
  * just one kind of Food.  Each machine has a capacity: it can make
@@ -48,10 +46,13 @@ public class Machine {
 		this.machineType = machineType;
 		this.machineFoodType = food;
 		this.capacity = capacityIn;
-		
-		//YOUR CODE GOES HERE...
+
 		//Log on starting machine
 		Simulation.logEvent(SimulationEvent.machineStarting(this, food, capacityIn));
+	}
+
+	public int getCapacity() {
+		return this.capacity;
 	}
 
 	/**
@@ -75,10 +76,7 @@ public class Machine {
 			food.wait();
 		}
 		//Notified at this point, log that food has been completed
-		//Also log that the food has been completed
 		Simulation.logEvent(SimulationEvent.machineDoneFood(this, food));
-		//TODO: Signal to Cook somehow that their food is ready
-		// YOUR CODE GOES HERE...
 		return new Object();
 	}
 
@@ -100,7 +98,7 @@ public class Machine {
 
 			}
 			catch(InterruptedException e) {
-				//Come here if thread gets interrupted while executing
+				//Come here if thread gets interrupted while executing (should never happen)
 				e.printStackTrace();
 			}
 		}

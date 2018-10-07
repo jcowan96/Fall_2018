@@ -74,10 +74,9 @@ public class Customer implements Runnable {
 		//Order should have been removed from orders list by Cook processing it
 		Simulation.logEvent(SimulationEvent.customerReceivedOrder(this, order, orderNum));
 
-		//Synchronize leaving the restraunt, freeing up space for another customer to enter
+		//Synchronize leaving Ratsie's, freeing up space for another customer to enter
 		synchronized(Simulation.tables) {
 			Simulation.tables.poll(); //Remove 1 object from tables to represent a free table
-			//System.out.println(toString() + " left: " + Simulation.tables.size() + " / " + Simulation.maxTables + " tables are now full");
 		}
 		Simulation.logEvent(SimulationEvent.customerLeavingRatsies(this));
 	}
@@ -89,7 +88,6 @@ public class Customer implements Runnable {
 			if (Simulation.tables.size() < Simulation.maxTables) {
 				Simulation.tables.add(new Object());
 				Simulation.logEvent(SimulationEvent.customerEnteredRatsies(this));
-				//System.out.println(toString() + " entered: " + Simulation.tables.size() + " / " + Simulation.maxTables + " tables are now full");
 				//Make sure to set global boolean
 				hasEntered = true;
 			}

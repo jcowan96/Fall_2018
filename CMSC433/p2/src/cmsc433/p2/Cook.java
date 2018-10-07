@@ -51,20 +51,28 @@ public class Cook implements Runnable {
 				if (currentOrder != null) {
 					Simulation.logEvent(SimulationEvent.cookReceivedOrder(this, currentOrder.food, currentOrder.orderNumber));
 
+					//Create array of threads
+					Thread[] threads = new Thread[currentOrder.food.size()];
+
 					//Next, send each item off to the appropriate machine
 					for (int i = 0; i < currentOrder.food.size(); i++) {
-						System.out.println("calling sendToMachine");
-						sendToMachine(currentOrder.food.get(i));
+						threads[i] = new Thread(new CookWorker(this, currentOrder.food.get(i), currentOrder.orderNumber));
+						threads[i].start();
+						//sendToMachine(currentOrder.food.get(i));
 					}
+
+					//Wait for all the threads to finish
+					for (int i = 0; i < threads.length; i++)
+						threads[i].join();
 
 					Simulation.logEvent(SimulationEvent.cookCompletedOrder(this, currentOrder.orderNumber));
 					synchronized (currentOrder) {
-						currentOrder.notify();
+						currentOrder.notify(); //Notify the customer their order has been completed
 					}
 				}
 				//Check to see when Cook gets interrupted: if so, break out of the while loop
 				if (Thread.interrupted()) {
-					//System.out.println(toString() + ": has been interrupted");
+					Simulation.logEvent(SimulationEvent.cookEnding(this));
 					break;
 				}
 			}
@@ -80,41 +88,60 @@ public class Cook implements Runnable {
 		}
 	}
 
-	private void sendToMachine(Food food) throws InterruptedException {
-		switch(food.name)
-		{
-			case "wings":
-				//System.out.println(toString() + ": Waiting for permit for fryer");
-				Simulation.fryerSem.acquire();
-				//System.out.println(toString() + ": Acquired permit for fryer");
-				Simulation.fryer.makeFood(food);
-				Simulation.fryerSem.release();
-				//System.out.println(toString() + ": Released permit for fryer");
-				break;
-			case "pizza":
-				//System.out.println(toString() + ": Waiting for permit for oven");
-				Simulation.ovenSem.acquire();
-				//System.out.println(toString() + ": Acquired permit for oven");
-				Simulation.oven.makeFood(food);
-				Simulation.ovenSem.release();
-				//System.out.println(toString() + ": Released permit for oven");
-				break;
-			case "sub":
-				//System.out.println(toString() + ": Waiting for permit for grill press");
-				Simulation.grillPressSem.acquire();
-				//System.out.println(toString() + ": Acquired permit for grillPress");
-				Simulation.grillPress.makeFood(food);
-				Simulation.grillPressSem.release();
-				//System.out.println(toString() + ": Released permit for grillPress");
-				break;
-			case "soda":
-				//System.out.println(toString() + ": Waiting for permit for fountain");
-				Simulation.fountainSem.acquire();
-				//System.out.println(toString() + ": Acquired permit for fountain");
-				Simulation.fountain.makeFood(food);
-				Simulation.fountainSem.release();
-				//System.out.println(toString() + ": Released permit for fountain");
-				break;
+	//Thread class to cook multiple items in parallel
+	//Cook is allowed to have unlimited threads, can do as much as it wants in as little time as it needs
+	private class CookWorker implements Runnable {
+		public Food foodCooking;
+		public int orderNumber;
+		public Cook currentCook;
+
+		public CookWorker(Cook cook, Food food, int num) {
+			this.currentCook = cook;
+			this.foodCooking = food;
+			this.orderNumber = num;
+		}
+
+		public void run() {
+			try {
+				sendToMachine();
+			}
+			catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+
+		private void sendToMachine() throws InterruptedException {
+			switch(foodCooking.name)
+			{
+				case "wings":
+					Simulation.fryerSem.acquire();
+					Simulation.logEvent(SimulationEvent.cookStartedFood(currentCook, foodCooking, orderNumber));
+					Simulation.fryer.makeFood(foodCooking);
+					Simulation.fryerSem.release();
+					Simulation.logEvent(SimulationEvent.cookFinishedFood(currentCook, foodCooking, orderNumber));
+					break;
+				case "pizza":
+					Simulation.ovenSem.acquire();
+					Simulation.logEvent(SimulationEvent.cookStartedFood(currentCook, foodCooking, orderNumber));
+					Simulation.oven.makeFood(foodCooking);
+					Simulation.ovenSem.release();
+					Simulation.logEvent(SimulationEvent.cookFinishedFood(currentCook, foodCooking, orderNumber));
+					break;
+				case "sub":
+					Simulation.grillPressSem.acquire();
+					Simulation.logEvent(SimulationEvent.cookStartedFood(currentCook, foodCooking, orderNumber));
+					Simulation.grillPress.makeFood(foodCooking);
+					Simulation.grillPressSem.release();
+					Simulation.logEvent(SimulationEvent.cookFinishedFood(currentCook, foodCooking, orderNumber));
+					break;
+				case "soda":
+					Simulation.fountainSem.acquire();
+					Simulation.logEvent(SimulationEvent.cookStartedFood(currentCook, foodCooking, orderNumber));
+					Simulation.fountain.makeFood(foodCooking);
+					Simulation.fountainSem.release();
+					Simulation.logEvent(SimulationEvent.cookFinishedFood(currentCook, foodCooking, orderNumber));
+					break;
+			}
 		}
 	}
 }

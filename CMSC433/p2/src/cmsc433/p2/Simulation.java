@@ -230,11 +230,11 @@ public class Simulation {
 		int machineCapacity = new Integer(args[3]).intValue();
 		boolean randomOrders = new Boolean(args[4]);
 		 */
-		int numCustomers = 5;
+		int numCustomers = 10;
 		int numCooks = 2;
-		int numTables = 12;
+		int numTables = 3;
 		int machineCapacity = 4;
-		boolean randomOrders = true;
+		boolean randomOrders = false;
 
 
 		// Run the simulation and then 

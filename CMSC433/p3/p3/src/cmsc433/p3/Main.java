@@ -30,10 +30,10 @@ public class Main
         // Add your solvers to this array to test them.
         MazeSolver[] solvers =
         {
-        		new STMazeSolverRec(maze),
+        		//new STMazeSolverRec(maze),
                 new STMazeSolverDFS(maze),
                 new STMazeSolverBFS(maze), 
-                //new StudentMTMazeSolver(maze),  //uncomment this line when you are ready to test yours
+                new StudentMTMazeSolver(maze),  //uncomment this line when you are ready to test yours
         };
 
         for (MazeSolver solver : solvers)
@@ -78,8 +78,8 @@ public class Main
         */
  
         //These lines are to run via Eclipse without a command prompt
-        String mazeLocationNotInProjectFolder = "C:\\p3-input\\"; //replace this with your maze directory
-        String whichMazeToUse = "200x200.mz"; //which maze file to load
+        String mazeLocationNotInProjectFolder = "C:\\Users\\Jack\\Dev\\Fall_2018\\CMSC433\\maze-dist\\"; //replace this with your maze directory
+        String whichMazeToUse = "6x6.mz"; //which maze file to load
         String[] replaceArgs = {mazeLocationNotInProjectFolder+whichMazeToUse};
         args = replaceArgs;
         

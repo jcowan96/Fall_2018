@@ -16,6 +16,6 @@ public class AccessRequestBlocking {
     }
 
     public boolean isBlocking() {
-        return isBlocking();
+        return isBlocking;
     }
 }

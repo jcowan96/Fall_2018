@@ -34,9 +34,6 @@ public class ResourceManagerActor extends UntypedActor {
 	//Maps name of local resources to users in the system and their access level to that resource
 	private HashMap<String, List<UserLevel>> userAccessLevels = new HashMap<String, List<UserLevel>>();
 
-	//Maps non-local resources to their managers in the system to help in forwarding request messages more quickly
-	private HashMap<String, ActorRef> resourceRemoteLocations = new HashMap<String, ActorRef>();
-
 	//Map of resource name to unknown remote resource msg/counter combo, used when looking for a resource of unknown location
 	private HashMap<String, List<UnknownRemote>> unknownRemoteMap = new HashMap<String, List<UnknownRemote>>();
 	
@@ -279,9 +276,9 @@ public class ResourceManagerActor extends UntypedActor {
 			}
 		}
 		else { //If the resource is not local, attempt to find where it exists, and forward the message
-			if (resourceRemoteLocations.containsKey(resourceName)) { //If the location of this resource has already been found
+			if (remoteResources.containsKey(resourceName)) { //If the location of this resource has already been found
 				//Forward the message to the resource location, keeping the sender the same
-				ActorRef remoteSource = resourceRemoteLocations.get(resourceName);
+				ActorRef remoteSource = remoteResources.get(resourceName);
 				remoteSource.tell(msg, from);
 				log(LogMsg.makeAccessReleaseForwardedLogMsg(getSelf(), remoteSource, accessRelease));
 			}
@@ -294,6 +291,20 @@ public class ResourceManagerActor extends UntypedActor {
 	//TODO
 	private void ManagementRequestHandler(ManagementRequestMsg msg, ActorRef from) {
 		ManagementRequest managementRequest = msg.getRequest();
+		String resourceName = managementRequest.getResourceName();
+		ManagementRequestType type = managementRequest.getType();
+		log(LogMsg.makeManagementRequestReceivedLogMsg(from, getSelf(), managementRequest));
+
+		//If resource in question is managed locally, process it in place
+		if (localResources.containsKey(resourceName)) {
+
+		}
+		//If resource is not managed locally, either find it from a known remote source, or search the system for it
+		else {
+			if (remoteResources.containsKey(resourceName)) {
+
+			}
+		}
 	}
 
 	//Checks to see if this resource manager has the resource in question, and sends a response with the result
@@ -306,20 +317,38 @@ public class ResourceManagerActor extends UntypedActor {
 		from.tell(new WhoHasResourceResponseMsg(resourceName, hasResource, getSelf()), getSelf());
 	}
 
-	//TODO
+
 	private void WhoHasResourceResponseHandler(WhoHasResourceResponseMsg msg, ActorRef from) {
 		boolean hasResource = msg.getResult();
 		String resourceName = msg.getResourceName();
 
-		if (!hasResource) { //Respondant does not have resource available locally
+		if (!hasResource) { //Respondent does not have resource available locally
 			if (unknownRemoteMap.get(resourceName) != null) {
-				UnknownRemote unk = unknownRemoteMap.get(resourceName).get(0);
-				if (unk != null) {
-					unk.decrementCount();
-					if (unk.getCounter() == 0) {
+				UnknownRemote unknown = unknownRemoteMap.get(resourceName).get(0);
+				if (unknown != null) {
+					unknown.decrementCount();
+					if (unknown.getCounter() == 0) {
 						List<UnknownRemote> temp = unknownRemoteMap.get(resourceName);
 						for (int i = 0; i < temp.size(); i++) {
-							//TODO
+							UnknownRemote unk = temp.get(i);
+							if (unk.getRequestMsg() instanceof AccessRequestMsg) {
+								AccessRequestMsg message = (AccessRequestMsg)unk.getRequestMsg();
+								AccessRequest request = message.getAccessRequest();
+								from.tell(new AccessRequestDeniedMsg(request, AccessRequestDenialReason.RESOURCE_NOT_FOUND), getSelf());
+								log(LogMsg.makeAccessRequestDeniedLogMsg(getSelf(), from, request, AccessRequestDenialReason.RESOURCE_NOT_FOUND));
+							}
+							else if (unk.getRequestMsg() instanceof AccessReleaseMsg) {
+								AccessReleaseMsg message = (AccessReleaseMsg)unk.getRequestMsg();
+								AccessRelease release = message.getAccessRelease();
+
+								log(LogMsg.makeAccessReleaseIgnoredLogMsg(from, getSelf(), release));
+							}
+							else if (unk.getRequestMsg() instanceof ManagementRequestMsg) {
+								ManagementRequestMsg message = (ManagementRequestMsg) unk.getRequestMsg();
+								ManagementRequest management = message.getRequest();
+								from.tell(new ManagementRequestDeniedMsg(management, ManagementRequestDenialReason.RESOURCE_NOT_FOUND), getSelf());
+								log(LogMsg.makeManagementRequestDeniedLogMsg(from, getSelf(), management, ManagementRequestDenialReason.RESOURCE_NOT_FOUND));
+							}
 						}
 						unknownRemoteMap.remove(resourceName);
 					}
@@ -332,7 +361,25 @@ public class ResourceManagerActor extends UntypedActor {
 			List<UnknownRemote> temp = unknownRemoteMap.get(resourceName);
 			if (temp != null) {
 				for (int i = 0; i < temp.size(); i++) {
-					//TODO
+					UnknownRemote unk = temp.get(i);
+					if (unk.getRequestMsg() instanceof AccessRequestMsg) {
+						AccessRequestMsg message = (AccessRequestMsg)unk.getRequestMsg();
+						AccessRequest request = message.getAccessRequest();
+						from.tell(message, getSelf());
+						log(LogMsg.makeAccessRequestForwardedLogMsg(getSelf(), from, request));
+					}
+					else if (unk.getRequestMsg() instanceof AccessReleaseMsg) {
+						AccessReleaseMsg message = (AccessReleaseMsg)unk.getRequestMsg();
+						AccessRelease release = message.getAccessRelease();
+						from.tell(message, getSelf());
+						log(LogMsg.makeAccessReleaseForwardedLogMsg(getSelf(), from, release));
+					}
+					else if (unk.getRequestMsg() instanceof ManagementRequestMsg) {
+						ManagementRequestMsg message = (ManagementRequestMsg) unk.getRequestMsg();
+						ManagementRequest management = message.getRequest();
+						from.tell(message, getSelf());
+						log(LogMsg.makeManagementRequestForwardedLogMsg(getSelf(), from, management));
+					}
 				}
 				unknownRemoteMap.remove(resourceName);
 				remoteResources.put(resourceName, from);
@@ -456,11 +503,38 @@ public class ResourceManagerActor extends UntypedActor {
 			AccessReleaseMsg releaseMsg = (AccessReleaseMsg)msg;
 			AccessReleaseHandler(releaseMsg, releaseMsg.getSender());
 
+			//After releasing access to resources, check in the blockingAccessRequests for the ability to fufill any of them
+			//now that an element has had its access released
 			if (!blockingAccessRequests.isEmpty()) {
 				Iterator<AccessRequestMsg> iter = blockingAccessRequests.iterator();
 				while (iter.hasNext()) {
 					AccessRequestMsg message = iter.next();
-					Acce
+					AccessRequest request = message.getAccessRequest();
+					String resourceName = request.getResourceName();
+					AccessRequestType requestType = request.getType();
+
+					List<UserLevel> temp = userAccessLevels.get(resourceName);
+					boolean access = true;
+
+					for (int i = 0; i < temp.size(); i++) {
+						AccessType type = temp.get(i).getAccessType();
+						ActorRef user = temp.get(i).getUser();
+
+						if (type == AccessType.EXCLUSIVE_WRITE && !user.equals(releaseMsg.getSender()))
+							access = false;
+						else if (type == AccessType.CONCURRENT_READ && !user.equals(releaseMsg.getSender())) {
+							if (requestType == AccessRequestType.EXCLUSIVE_WRITE_BLOCKING || requestType == AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING)
+								access = false;
+						}
+					}
+
+					if (access) {
+						AccessRequestBlocking block = new AccessRequestBlocking(message, true);
+						AccessRequestHandler(block, message.getReplyTo());
+						iter.remove();
+					}
+					else
+						break;
 				}
 			}
 		}
@@ -474,7 +548,6 @@ public class ResourceManagerActor extends UntypedActor {
 			WhoHasResourceRequestMsg resourceRequest = (WhoHasResourceRequestMsg)msg;
 			WhoHasResourceRequestHandler(resourceRequest, resourceRequest.getSender());
 		}
-		//TODO: Might not need the getSender()
 		//Reply to the manager that sent the resource response
 		else if (msg instanceof WhoHasResourceResponseMsg) {
 			WhoHasResourceResponseMsg resourceResponse = (WhoHasResourceResponseMsg)msg;

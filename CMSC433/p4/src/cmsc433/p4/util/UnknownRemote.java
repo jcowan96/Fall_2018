@@ -2,25 +2,31 @@ package cmsc433.p4.util;
 
 public class UnknownRemote {
     private Object requestMsg;
-    private int counter = 0;
+    private int counter;
 
-    private UnknownRemote(Object request) {
-        this.requestMsg = request;
+    public UnknownRemote() {
+        this.requestMsg = null;
+        this.counter = 0;
     }
 
-    private void incrementCount() {
+    public UnknownRemote(Object request) {
+        this.requestMsg = request;
+        this.counter = 0;
+    }
+
+    public void incrementCount() {
         counter += 1;
     }
 
-    private void decrementCount() {
+    public void decrementCount() {
         counter -= 1;
     }
 
-    private int getCounter() {
+    public int getCounter() {
         return counter;
     }
 
-    private Object getRequestMsg() {
+    public Object getRequestMsg() {
         return requestMsg;
     }
 }

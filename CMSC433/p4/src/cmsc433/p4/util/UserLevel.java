@@ -8,7 +8,7 @@ public class UserLevel {
     private ActorRef user;
     private AccessType accessType;
 
-    private UserLevel(ActorRef usr, AccessType at) {
+    public UserLevel(ActorRef usr, AccessType at) {
         this.user = usr;
         this.accessType = at;
     }

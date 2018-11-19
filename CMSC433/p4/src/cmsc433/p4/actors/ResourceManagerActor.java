@@ -292,17 +292,103 @@ public class ResourceManagerActor extends UntypedActor {
 	private void ManagementRequestHandler(ManagementRequestMsg msg, ActorRef from) {
 		ManagementRequest managementRequest = msg.getRequest();
 		String resourceName = managementRequest.getResourceName();
-		ManagementRequestType type = managementRequest.getType();
+		boolean hasResource = localResources.containsKey(resourceName);
 		log(LogMsg.makeManagementRequestReceivedLogMsg(from, getSelf(), managementRequest));
 
 		//If resource in question is managed locally, process it in place
-		if (localResources.containsKey(resourceName)) {
+		if (hasResource) {
+			Resource res = localResources.get(resourceName);
+			ResourceStatus status = res.getStatus();
+			//If the request is to ENABLE, this is the easy case
+			if (managementRequest.getType() == ManagementRequestType.ENABLE) {
+				if (status == ResourceStatus.ENABLED) { //If the resource is already enabled, just log
+					log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), resourceName, ResourceStatus.ENABLED));
+				}
+				else if (status == ResourceStatus.DISABLED) { //If disabled, enable it, remove from queue of messages to be disabled, and log
+					res.enable();
+					toDisable.remove(resourceName);
+					log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), resourceName, ResourceStatus.DISABLED));
+				}
+				//Finally, reply with a request granted message to whoever made the request, and log this message was sent
+				from.tell(new ManagementRequestGrantedMsg(managementRequest), getSelf());
+				log(LogMsg.makeManagementRequestGrantedLogMsg(from, getSelf(), managementRequest));
+			}
+			//If the request is to DISABLE, this is the more complicated case
+			else if (managementRequest.getType() == ManagementRequestType.DISABLE) {
+				//If resource is already disabled, just reply with the request granted to the asker: no work to do
+				if (status == ResourceStatus.DISABLED) {
+					from.tell(new ManagementRequestGrantedMsg(managementRequest), getSelf());
+					log(LogMsg.makeManagementRequestGrantedLogMsg(from, getSelf(), managementRequest));
+				}
+				//If the resource is already enabled, it's trickier
+				else if (status == ResourceStatus.ENABLED) {
+					List<UserLevel> temp;
+					boolean disableFlag = true;
+					if (!userAccessLevels.containsKey(resourceName)){
+						temp = new ArrayList<UserLevel>();
+						userAccessLevels.put(resourceName, temp);
+					}
+					else {
+						temp = userAccessLevels.get(resourceName);
+					}
 
+					//Iterate through userAccessLevels for the specified resource and flag the boolean if the DISABLE request
+					//is coming from an actor who has already has an access level for the resource
+					for (int i = 0; i < temp.size(); i++) {
+						if (temp.get(i).getUser().equals(from))
+							disableFlag = false;
+					}
+
+					//If user does not have access to resource already, keep processing request
+					if (disableFlag) {
+						//Iterate through access blocking queue and find out if any requests are waiting on the resource from
+						//the original message. If they are, deny the request because the resource is disabled
+						//TODO: Can probably fix this
+						Iterator<AccessRequestMsg> accessIter = blockingAccessRequests.iterator();
+						while (accessIter.hasNext()) {
+							AccessRequestMsg mess = accessIter.next();
+							if (resourceName.equals(mess.getAccessRequest().getResourceName())) {
+								from.tell(new AccessRequestDeniedMsg(mess, AccessRequestDenialReason.RESOURCE_DISABLED), getSelf());
+								log(LogMsg.makeAccessRequestDeniedLogMsg(from, getSelf(), mess.getAccessRequest(), AccessRequestDenialReason.RESOURCE_DISABLED));
+							}
+						}
+						if (temp.isEmpty()) { //If the list is empty/iteration didnt happen, disable the resource
+							localResources.get(resourceName).disable();
+							log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), resourceName, status));
+
+							if (!toDisable.containsKey(resourceName)) {
+								List<ManagementRequestMsg> list = new LinkedList<ManagementRequestMsg>();
+								toDisable.put(resourceName, list);
+							}
+							toDisable.get(resourceName).add(msg);
+							from.tell(new ManagementRequestGrantedMsg(managementRequest), getSelf());
+							log(LogMsg.makeManagementRequestGrantedLogMsg(from, getSelf(), managementRequest));
+						}
+						else {
+							if (!toDisable.containsKey(resourceName)) {
+								List<ManagementRequestMsg> list = new LinkedList<ManagementRequestMsg>();
+								toDisable.put(resourceName, list);
+							}
+							toDisable.get(resourceName).add(msg);
+						}
+					}
+					else { //User already has access to the resource, deny their request
+						from.tell(new ManagementRequestDeniedMsg(managementRequest, ManagementRequestDenialReason.ACCESS_HELD_BY_USER), getSelf());
+						log(LogMsg.makeManagementRequestDeniedLogMsg(from, getSelf(), managementRequest, ManagementRequestDenialReason.ACCESS_HELD_BY_USER));
+					}
+				}
+			}
 		}
 		//If resource is not managed locally, either find it from a known remote source, or search the system for it
 		else {
+			//If the resource is with a known manager, reroute the request there
 			if (remoteResources.containsKey(resourceName)) {
-
+				ActorRef remoteManager = remoteResources.get(resourceName);
+				remoteManager.tell(msg, from);
+				log(LogMsg.makeManagementRequestForwardedLogMsg(getSelf(), remoteManager, managementRequest));
+			}
+			else {
+				searchUnknownRemote(msg);
 			}
 		}
 	}

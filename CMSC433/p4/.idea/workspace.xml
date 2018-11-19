@@ -12,11 +12,11 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="ResourceManagerActor.java" pinned="false" current-in-tab="true">
+      <file leaf-file-name="ResourceManagerActor.java" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/actors/ResourceManagerActor.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="482">
-              <caret line="303" column="25" lean-forward="false" selection-start-line="303" selection-start-column="25" selection-end-line="303" selection-end-column="25" />
+            <state relative-caret-position="370">
+              <caret line="404" column="0" lean-forward="true" selection-start-line="404" selection-start-column="0" selection-end-line="404" selection-end-column="0" />
               <folding>
                 <element signature="imports" expanded="true" />
                 <element signature="e#488#506#0" expanded="true" />
@@ -31,20 +31,21 @@
                 <element signature="method#AddLocalUsersHandler#0;class#ResourceManagerActor#0" expanded="false" />
                 <element signature="method#AddRemoteManagersHandler#0;class#ResourceManagerActor#0" expanded="false" />
                 <element signature="method#AccessRequestHandler#0;class#ResourceManagerActor#0" expanded="false" />
-                <element signature="method#AccessReleaseHandler#0;class#ResourceManagerActor#0" expanded="false" />
+                <element signature="e#16133#16155#0" expanded="true" />
+                <element signature="e#16556#16578#0" expanded="true" />
                 <element signature="method#WhoHasResourceRequestHandler#0;class#ResourceManagerActor#0" expanded="false" />
                 <element signature="method#WhoHasResourceResponseHandler#0;class#ResourceManagerActor#0" expanded="false" />
                 <element signature="method#searchUnknownRemote#0;class#ResourceManagerActor#0" expanded="false" />
-                <element signature="e#18347#18362#0" expanded="true" />
-                <element signature="e#19332#19347#0" expanded="true" />
-                <element signature="e#20333#20348#0" expanded="true" />
+                <element signature="e#22917#22932#0" expanded="true" />
+                <element signature="e#23902#23917#0" expanded="true" />
+                <element signature="e#24903#24918#0" expanded="true" />
                 <element signature="method#onReceive#0;class#ResourceManagerActor#0" expanded="false" />
               </folding>
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="Main.java" pinned="false" current-in-tab="false">
+      <file leaf-file-name="Main.java" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/util/Main.java">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="200">
@@ -121,6 +122,7 @@
     <findStrings>
       <find>loggeractor</find>
       <find>getUser</find>
+      <find>resourceRemotelocat</find>
     </findStrings>
   </component>
   <component name="GradleLocalSettings">
@@ -138,8 +140,8 @@
         <option value="$PROJECT_DIR$/src/cmsc433/p4/util/UnknownRemote.java" />
         <option value="$PROJECT_DIR$/src/cmsc433/p4/messages/WhoHasResourceRequestMsg.java" />
         <option value="$PROJECT_DIR$/src/cmsc433/p4/util/AccessRequestBlocking.java" />
-        <option value="$PROJECT_DIR$/src/cmsc433/p4/util/Main.java" />
         <option value="$PROJECT_DIR$/src/cmsc433/p4/actors/ResourceManagerActor.java" />
+        <option value="$PROJECT_DIR$/src/cmsc433/p4/util/Main.java" />
       </list>
     </option>
   </component>
@@ -368,15 +370,16 @@
       <option name="presentableId" value="Default" />
       <updated>1541995908443</updated>
       <workItem from="1541995911286" duration="453000" />
-      <workItem from="1542225435897" duration="32421000" />
+      <workItem from="1542225435897" duration="36327000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="32874000" />
+    <option name="totallyTimeSpent" value="36780000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="-8" y="-8" width="1936" height="1056" extended-state="6" />
+    <editor active="true" />
     <layout>
       <window_info id="Palette" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
@@ -767,18 +770,10 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/util/Main.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="200">
-          <caret line="33" column="55" lean-forward="false" selection-start-line="33" selection-start-column="55" selection-end-line="33" selection-end-column="55" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/actors/ResourceManagerActor.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="482">
-          <caret line="303" column="25" lean-forward="false" selection-start-line="303" selection-start-column="25" selection-end-line="303" selection-end-column="25" />
+        <state relative-caret-position="370">
+          <caret line="404" column="0" lean-forward="true" selection-start-line="404" selection-start-column="0" selection-end-line="404" selection-end-column="0" />
           <folding>
             <element signature="imports" expanded="true" />
             <element signature="e#488#506#0" expanded="true" />
@@ -793,15 +788,24 @@
             <element signature="method#AddLocalUsersHandler#0;class#ResourceManagerActor#0" expanded="false" />
             <element signature="method#AddRemoteManagersHandler#0;class#ResourceManagerActor#0" expanded="false" />
             <element signature="method#AccessRequestHandler#0;class#ResourceManagerActor#0" expanded="false" />
-            <element signature="method#AccessReleaseHandler#0;class#ResourceManagerActor#0" expanded="false" />
+            <element signature="e#16133#16155#0" expanded="true" />
+            <element signature="e#16556#16578#0" expanded="true" />
             <element signature="method#WhoHasResourceRequestHandler#0;class#ResourceManagerActor#0" expanded="false" />
             <element signature="method#WhoHasResourceResponseHandler#0;class#ResourceManagerActor#0" expanded="false" />
             <element signature="method#searchUnknownRemote#0;class#ResourceManagerActor#0" expanded="false" />
-            <element signature="e#18347#18362#0" expanded="true" />
-            <element signature="e#19332#19347#0" expanded="true" />
-            <element signature="e#20333#20348#0" expanded="true" />
+            <element signature="e#22917#22932#0" expanded="true" />
+            <element signature="e#23902#23917#0" expanded="true" />
+            <element signature="e#24903#24918#0" expanded="true" />
             <element signature="method#onReceive#0;class#ResourceManagerActor#0" expanded="false" />
           </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/util/Main.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="200">
+          <caret line="33" column="55" lean-forward="false" selection-start-line="33" selection-start-column="55" selection-end-line="33" selection-end-column="55" />
+          <folding />
         </state>
       </provider>
     </entry>

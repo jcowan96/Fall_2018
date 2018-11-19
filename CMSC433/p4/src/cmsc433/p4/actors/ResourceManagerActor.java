@@ -34,8 +34,8 @@ public class ResourceManagerActor extends UntypedActor {
 	//Maps name of local resources to users in the system and their access level to that resource
 	private HashMap<String, List<UserLevel>> userAccessLevels = new HashMap<String, List<UserLevel>>();
 
-	//Map of resource name to unknown remote resource msg/counter combo, used when looking for a resource of unknown location
-	private HashMap<String, List<UnknownRemote>> unknownRemoteMap = new HashMap<String, List<UnknownRemote>>();
+	//Map of resource name to pair of message object and integer counter, used to look for remote resources when location is unknown
+	private HashMap<String, List<HashMap<Object, Integer>>> unknownRemoteMap = new HashMap<String, List<HashMap<Object, Integer>>>();
 	
 	/**
 	 * Props structure-generator for this class.
@@ -82,13 +82,15 @@ public class ResourceManagerActor extends UntypedActor {
 	private void AddInitialLocalResourcesHandler(AddInitialLocalResourcesRequestMsg msg, ActorRef from) {
 		ArrayList<Resource> resources = msg.getLocalResources();
 
-		for (int i = 0; i < resources.size(); i++) {
+		int i = 0;
+		while (i < resources.size()) {
 			Resource res = resources.get(i);
 			localResources.put(res.getName(), res); //Map the name and resource for O(1) resource location
 			log(LogMsg.makeLocalResourceCreatedLogMsg(getSelf(), res.getName())); //Log creation of new local resource
 
 			res.enable(); //Resources are disabled by default, so we must enable them
 			log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), res.getName(), res.getStatus())); //Log change of resource status
+			i++;
 		}
 
 		//Send the reply message
@@ -100,8 +102,10 @@ public class ResourceManagerActor extends UntypedActor {
 		ArrayList<ActorRef> localUsers = msg.getLocalUsers();
 
 		//Add received set of local users to the usersLocal list
-		for (int i = 0; i < localUsers.size(); i++) {
+		int i = 0;
+		while (i < localUsers.size()) {
 			usersLocal.add(localUsers.get(i));
+			i++;
 		}
 
 		//Send the reply message
@@ -113,23 +117,24 @@ public class ResourceManagerActor extends UntypedActor {
 		ArrayList<ActorRef> managers = msg.getManagerList();
 
 		//Add the managers into the list of system managers, as long as it is not this specific manager
-		for (int i = 0; i < managers.size(); i++) {
+		int i = 0;
+		while (i < managers.size()) {
 			if (!managers.get(i).equals(getSelf()))
 				systemManagers.add(managers.get(i));
+			i++;
 		}
 
 		//Send the reply message
 		from.tell(new AddRemoteManagersResponseMsg(msg), getSelf());
 	}
 
-	//TODO
 	//Handles incoming access requests
 	private void AccessRequestHandler(AccessRequestBlocking block, ActorRef from) {
 		AccessRequestMsg msg = block.getAccessRequestMsg();
 		AccessRequest request = msg.getAccessRequest();
 		String resourceName = request.getResourceName();
 		boolean hasResource = localResources.containsKey(resourceName);
-		if (!block.isBlocking())
+		if (!block.isBlocking()) //If not a blocking message, log that request has been received
 			log(LogMsg.makeAccessRequestReceivedLogMsg(msg.getReplyTo(), getSelf(), request));
 
 		if (hasResource) { //If the resource is contained locally, process it in place
@@ -143,11 +148,12 @@ public class ResourceManagerActor extends UntypedActor {
 				return; //TODO: Refactor to get rid of this
 			}
 
+			//TODO: try and get rid of shit like this
 			if (!userAccessLevels.containsKey(resourceName))
 				userAccessLevels.put(resourceName, new ArrayList<UserLevel>());
 
 			//If
-			if (userAccessLevels.get(resourceName).size() == 0) {
+			if (userAccessLevels.isEmpty()) {
 				switch (requestType){
 					case CONCURRENT_READ_BLOCKING:
 					case CONCURRENT_READ_NONBLOCKING:
@@ -217,7 +223,7 @@ public class ResourceManagerActor extends UntypedActor {
 		else { //If resource does not exist locally, either redirect the request if we know where to go, or find it if we dont
 			if (remoteResources.containsKey(resourceName)) { //We know where to go, so redirect the message there
 				ActorRef remoteManager = remoteResources.get(resourceName);
-				remoteManager.tell(msg, getSelf()); //TODO: Should this be to getSender()?
+				remoteManager.tell(msg, getSelf());
 				log(LogMsg.makeAccessRequestForwardedLogMsg(getSelf(), remoteManager, request));
 			}
 			else { //We don't know where it is, so we have to look for it in the system
@@ -410,27 +416,28 @@ public class ResourceManagerActor extends UntypedActor {
 
 		if (!hasResource) { //Respondent does not have resource available locally
 			if (unknownRemoteMap.get(resourceName) != null) {
-				UnknownRemote unknown = unknownRemoteMap.get(resourceName).get(0);
+				HashMap<Object, Integer> unknown = unknownRemoteMap.get(resourceName).get(0);
 				if (unknown != null) {
-					unknown.decrementCount();
-					if (unknown.getCounter() == 0) {
-						List<UnknownRemote> temp = unknownRemoteMap.get(resourceName);
+					Object mess = unknown.keySet().toArray()[0]; //Should only be 1 key per HashMap, just a K/V pair
+					unknown.put(mess, unknown.get(mess) - 1); //Decrement count by 1
+					if (unknown.get(mess) == 0) {
+						List<HashMap<Object, Integer>> temp = unknownRemoteMap.get(resourceName);
 						for (int i = 0; i < temp.size(); i++) {
-							UnknownRemote unk = temp.get(i);
-							if (unk.getRequestMsg() instanceof AccessRequestMsg) {
-								AccessRequestMsg message = (AccessRequestMsg)unk.getRequestMsg();
+							HashMap<Object, Integer> unk = temp.get(i);
+							if (mess instanceof AccessRequestMsg) {
+								AccessRequestMsg message = (AccessRequestMsg)mess;
 								AccessRequest request = message.getAccessRequest();
 								from.tell(new AccessRequestDeniedMsg(request, AccessRequestDenialReason.RESOURCE_NOT_FOUND), getSelf());
 								log(LogMsg.makeAccessRequestDeniedLogMsg(getSelf(), from, request, AccessRequestDenialReason.RESOURCE_NOT_FOUND));
 							}
-							else if (unk.getRequestMsg() instanceof AccessReleaseMsg) {
-								AccessReleaseMsg message = (AccessReleaseMsg)unk.getRequestMsg();
+							else if (mess instanceof AccessReleaseMsg) {
+								AccessReleaseMsg message = (AccessReleaseMsg)mess;
 								AccessRelease release = message.getAccessRelease();
 
 								log(LogMsg.makeAccessReleaseIgnoredLogMsg(from, getSelf(), release));
 							}
-							else if (unk.getRequestMsg() instanceof ManagementRequestMsg) {
-								ManagementRequestMsg message = (ManagementRequestMsg) unk.getRequestMsg();
+							else if (mess instanceof ManagementRequestMsg) {
+								ManagementRequestMsg message = (ManagementRequestMsg) mess;
 								ManagementRequest management = message.getRequest();
 								from.tell(new ManagementRequestDeniedMsg(management, ManagementRequestDenialReason.RESOURCE_NOT_FOUND), getSelf());
 								log(LogMsg.makeManagementRequestDeniedLogMsg(from, getSelf(), management, ManagementRequestDenialReason.RESOURCE_NOT_FOUND));
@@ -444,24 +451,25 @@ public class ResourceManagerActor extends UntypedActor {
 		else { //Respondent has the resource locally, so go through stored messages and update with the location
 			log(LogMsg.makeRemoteResourceDiscoveredLogMsg(getSelf(), from, resourceName));
 
-			List<UnknownRemote> temp = unknownRemoteMap.get(resourceName);
+			List<HashMap<Object, Integer>> temp = unknownRemoteMap.get(resourceName);
 			if (temp != null) {
 				for (int i = 0; i < temp.size(); i++) {
-					UnknownRemote unk = temp.get(i);
-					if (unk.getRequestMsg() instanceof AccessRequestMsg) {
-						AccessRequestMsg message = (AccessRequestMsg)unk.getRequestMsg();
+					HashMap<Object, Integer> unk = temp.get(i);
+					Object mess = unk.keySet().toArray()[0]; //Should only be 1 key per HashMap, just a K/V pair
+					if (mess instanceof AccessRequestMsg) {
+						AccessRequestMsg message = (AccessRequestMsg)mess;
 						AccessRequest request = message.getAccessRequest();
 						from.tell(message, getSelf());
 						log(LogMsg.makeAccessRequestForwardedLogMsg(getSelf(), from, request));
 					}
-					else if (unk.getRequestMsg() instanceof AccessReleaseMsg) {
-						AccessReleaseMsg message = (AccessReleaseMsg)unk.getRequestMsg();
+					else if (mess instanceof AccessReleaseMsg) {
+						AccessReleaseMsg message = (AccessReleaseMsg)mess;
 						AccessRelease release = message.getAccessRelease();
 						from.tell(message, getSelf());
 						log(LogMsg.makeAccessReleaseForwardedLogMsg(getSelf(), from, release));
 					}
-					else if (unk.getRequestMsg() instanceof ManagementRequestMsg) {
-						ManagementRequestMsg message = (ManagementRequestMsg) unk.getRequestMsg();
+					else if (mess instanceof ManagementRequestMsg) {
+						ManagementRequestMsg message = (ManagementRequestMsg)mess;
 						ManagementRequest management = message.getRequest();
 						from.tell(message, getSelf());
 						log(LogMsg.makeManagementRequestForwardedLogMsg(getSelf(), from, management));
@@ -484,66 +492,72 @@ public class ResourceManagerActor extends UntypedActor {
 		if (requestMsg instanceof AccessRequestMsg) {
 			AccessRequestMsg accessRequest = (AccessRequestMsg)requestMsg;
 			String resourceName = accessRequest.getAccessRequest().getResourceName();
-			UnknownRemote unk = new UnknownRemote(accessRequest);
+			HashMap<Object, Integer> unknown = new HashMap<Object, Integer>();
+			unknown.put(accessRequest, 0);
 
 			if (unknownRemoteMap.containsKey(resourceName)) //If resource is already in map, add new request to existing list
-				unknownRemoteMap.get(resourceName).add(unk);
+				unknownRemoteMap.get(resourceName).add(unknown);
 			else { //Otherwise, look at all system managers and send resource request messages to all of them for current resource
 				int i = 0;
 				while (i < systemManagers.size()) {
-					unk.incrementCount();
+					//Increment count
+					unknown.put(accessRequest, unknown.get(accessRequest) + 1);
 					ActorRef manager = systemManagers.get(i);
 					manager.tell(new WhoHasResourceRequestMsg(resourceName, getSelf()), getSelf());
 					i++;
 				}
 
 				//Finally, add resource with request message to unknownResourceMap
-				List<UnknownRemote> temp = new LinkedList<UnknownRemote>();
-				temp.add(unk);
+				List<HashMap<Object, Integer>> temp = new LinkedList<HashMap<Object, Integer>>();
+				temp.add(unknown);
 				unknownRemoteMap.put(resourceName, temp);
 			}
 		}
 		else if (requestMsg instanceof AccessReleaseMsg) {
 			AccessReleaseMsg releaseRequest = (AccessReleaseMsg)requestMsg;
 			String resourceName = releaseRequest.getAccessRelease().getResourceName();
-			UnknownRemote unk = new UnknownRemote(releaseRequest);
+			HashMap<Object, Integer> unknown = new HashMap<Object, Integer>();
+			unknown.put(releaseRequest, 0);
 
 			if (unknownRemoteMap.containsKey(resourceName)) //If resource is already in map, add new request to existing list
-				unknownRemoteMap.get(resourceName).add(unk);
+				unknownRemoteMap.get(resourceName).add(unknown);
 			else { //Otherwise, look at all system managers and send resource request messages to all of them for current resource
 				int i = 0;
 				while (i < systemManagers.size()) {
-					unk.incrementCount();
+					//Increment count
+					unknown.put(releaseRequest, unknown.get(releaseRequest) + 1);
 					ActorRef manager = systemManagers.get(i);
 					manager.tell(new WhoHasResourceRequestMsg(resourceName, getSelf()), getSelf());
 					i++;
 				}
 
 				//Finally, add resource with request message to unknownResourceMap
-				List<UnknownRemote> temp = new LinkedList<UnknownRemote>();
-				temp.add(unk);
+				List<HashMap<Object, Integer>> temp = new LinkedList<HashMap<Object, Integer>>();
+				temp.add(unknown);
 				unknownRemoteMap.put(resourceName, temp);
 			}
 		}
 		else if (requestMsg instanceof ManagementRequestMsg) {
 			ManagementRequestMsg managementRequest = (ManagementRequestMsg)requestMsg;
 			String resourceName = managementRequest.getRequest().getResourceName();
-			UnknownRemote unk = new UnknownRemote(managementRequest);
+			HashMap<Object, Integer> unknown = new HashMap<Object, Integer>();
+			unknown.put(managementRequest, 0);
 
 			if (unknownRemoteMap.containsKey(resourceName)) //If resource is already in map, add new request to existing list
-				unknownRemoteMap.get(resourceName).add(unk);
+				unknownRemoteMap.get(resourceName).add(unknown);
 			else { //Otherwise, look at all system managers and send resource request messages to all of them for current resource
 				int i = 0;
 				while (i < systemManagers.size()) {
-					unk.incrementCount();
+					//Increment count
+					unknown.put(managementRequest, unknown.get(managementRequest) + 1);
 					ActorRef manager = systemManagers.get(i);
 					manager.tell(new WhoHasResourceRequestMsg(resourceName, getSelf()), getSelf());
 					i++;
 				}
 
 				//Finally, add resource with request message to unknownResourcesMap
-				List<UnknownRemote> temp = new LinkedList<UnknownRemote>();
-				temp.add(unk);
+				List<HashMap<Object, Integer>> temp = new LinkedList<HashMap<Object, Integer>>();
+				temp.add(unknown);
 				unknownRemoteMap.put(resourceName, temp);
 			}
 		}

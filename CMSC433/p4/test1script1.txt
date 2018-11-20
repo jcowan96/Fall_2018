@@ -1,4 +1,5 @@
-write-request-b Printer_0
-read-request-n 	Scanner_0
-write-release 	Printer_0
-read-release 	Scanner_0
+read-request-b Printer_0
+read-release Printer_0
+
+
+

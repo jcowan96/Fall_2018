@@ -162,11 +162,11 @@ public class ResourceManagerActor extends UntypedActor {
 					for (int i = 0; i < temp.size(); i++) {
 						AccessType accessType = temp.get(i).getAccessType();
 						if (!from.equals(temp.get(i).getUser())) {
-							if (accessType == AccessType.CONCURRENT_READ) {
-								if (requestType == AccessRequestType.EXCLUSIVE_WRITE_BLOCKING || requestType == AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING)
+							if (accessType == AccessType.CONCURRENT_READ) { //If youre requesting write and another user has read, cant access
+								if (requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_BLOCKING) || requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING))
 									access = false;
 							}
-							else if (accessType == AccessType.EXCLUSIVE_WRITE) {
+							else if (accessType == AccessType.EXCLUSIVE_WRITE) { //If another user has write access, cant get access
 								access = false;
 							}
 						}
@@ -315,7 +315,7 @@ public class ResourceManagerActor extends UntypedActor {
 					//If this user is not the sender, check its access level
 					if (!msg.getSender().equals(user)) {
 						if (type == AccessType.CONCURRENT_READ) { //Another user has concurrent read access, can grant if our request is also to read
-							if (requestType == AccessRequestType.EXCLUSIVE_WRITE_BLOCKING || requestType == AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING)
+							if (requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_BLOCKING) || requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING))
 								access = false;
 						} else if (type == AccessType.EXCLUSIVE_WRITE) //Another user has exclusive write access, cant grant request
 							access = false;
@@ -323,10 +323,12 @@ public class ResourceManagerActor extends UntypedActor {
 				}
 				//Checked all other users of the resource at this point, made it to end of list
 				//If user can now access resource, send access granted message and remove element from blocking queue
-				if (access) {
-					AccessRequestBlocking block = new AccessRequestBlocking(message, true);
-					AccessRequestHandler(block, message.getReplyTo());
-					log(LogMsg.makeAccessRequestGrantedLogMsg(message.getReplyTo(), getSelf(), request));
+				if (!access) {
+					//Breaking here will help short-circuit blockingQueue evaluation, and hopefully mitigate timeout issues
+					break;
+				}
+				else {
+					AccessRequestHandler(new AccessRequestBlocking(message, true), message.getReplyTo());
 					iter.remove();
 				}
 			}

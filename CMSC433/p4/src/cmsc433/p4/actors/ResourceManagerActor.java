@@ -14,28 +14,28 @@ public class ResourceManagerActor extends UntypedActor {
 	private ActorRef logger;					// Actor to send logging messages to
 
 	//Resources local to this manager, keyed by name
-	private HashMap<String, Resource> localResources = new HashMap<String, Resource>();
+	private HashMap<String, Resource> localResources = new HashMap<>();
 
 	//All other managers this knows about in the system
-	private ArrayList<ActorRef> systemManagers = new ArrayList<ActorRef>();
+	private ArrayList<ActorRef> systemManagers = new ArrayList<>();
 
 	//All local users to this manager
-	private ArrayList<ActorRef> usersLocal = new ArrayList<ActorRef>();
+	private ArrayList<ActorRef> usersLocal = new ArrayList<>();
 
 	//Map of remote resource names and the manager that owns them
-	private HashMap<String, ActorRef> remoteResources = new HashMap<String, ActorRef>();
+	private HashMap<String, ActorRef> remoteResources = new HashMap<>();
 
 	//Queue for access requests being blocked
-	private Queue<AccessRequestMsg> blockingAccessRequests = new LinkedList<AccessRequestMsg>();
+	private Queue<AccessRequestMsg> blockingAccessRequests = new LinkedList<>();
 
 	//Maps resource name to the requests to disable it
-	private HashMap<String, List<ManagementRequestMsg>> toDisable = new HashMap<String, List<ManagementRequestMsg>>();
+	private HashMap<String, List<ManagementRequestMsg>> toDisable = new HashMap<>();
 
 	//Maps name of local resources to users in the system and their access level to that resource
-	private HashMap<String, List<UserLevel>> userAccessLevels = new HashMap<String, List<UserLevel>>();
+	private HashMap<String, List<UserLevel>> userAccessLevels = new HashMap<>();
 
 	//Map of resource name to pair of message object and integer counter, used to look for remote resources when location is unknown
-	private HashMap<String, List<HashMap<Object, Integer>>> unknownRemoteMap = new HashMap<String, List<HashMap<Object, Integer>>>();
+	private HashMap<String, List<HashMap<Object, Integer>>> unknownRemoteMap = new HashMap<>();
 	
 	/**
 	 * Props structure-generator for this class.
@@ -85,11 +85,16 @@ public class ResourceManagerActor extends UntypedActor {
 		int i = 0;
 		while (i < resources.size()) {
 			Resource res = resources.get(i);
+			String resourceName = res.getName();
+
+			//Initialize data structures for this resource
 			localResources.put(res.getName(), res); //Map the name and resource for O(1) resource location
-			log(LogMsg.makeLocalResourceCreatedLogMsg(getSelf(), res.getName())); //Log creation of new local resource
+			toDisable.put(resourceName, new LinkedList<>()); //Initialize future pending disable messages for this resource
+			userAccessLevels.put(resourceName, new LinkedList<>()); //Initialize future pending access levels for users for this resource
 
 			res.enable(); //Resources are disabled by default, so we must enable them
 			log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), res.getName(), res.getStatus())); //Log change of resource status
+			log(LogMsg.makeLocalResourceCreatedLogMsg(getSelf(), resourceName)); //Log creation of new local resource
 			i++;
 		}
 
@@ -119,8 +124,7 @@ public class ResourceManagerActor extends UntypedActor {
 		//Add the managers into the list of system managers, as long as it is not this specific manager
 		int i = 0;
 		while (i < managers.size()) {
-			if (!managers.get(i).equals(getSelf()))
-				systemManagers.add(managers.get(i));
+			if (!managers.get(i).equals(getSelf())) systemManagers.add(managers.get(i));
 			i++;
 		}
 
@@ -133,136 +137,137 @@ public class ResourceManagerActor extends UntypedActor {
 		AccessRequestMsg msg = block.getAccessRequestMsg();
 		AccessRequest request = msg.getAccessRequest();
 		String resourceName = request.getResourceName();
-		boolean hasResource = localResources.containsKey(resourceName);
 		if (!block.isBlocking()) //If not a blocking message, log that request has been received
 			log(LogMsg.makeAccessRequestReceivedLogMsg(msg.getReplyTo(), getSelf(), request));
 
-		if (hasResource) { //If the resource is contained locally, process it in place
+		//If the resource is contained locally, process it in place
+		if (localResources.containsKey(resourceName)) {
 			AccessRequestType requestType = request.getType();
-
-			//Check if the resource was disabled before proceeding
 			ResourceStatus resourceStatus = localResources.get(resourceName).getStatus();
-			if (toDisable.containsKey(resourceName) || resourceStatus == ResourceStatus.DISABLED) {
-				from.tell(new AccessRequestDeniedMsg(request, AccessRequestDenialReason.RESOURCE_DISABLED), getSelf()); //TODO: Is this right replyTo?
-				log(LogMsg.makeAccessRequestDeniedLogMsg(from, getSelf(), request, AccessRequestDenialReason.RESOURCE_DISABLED));
-				return; //TODO: Refactor to get rid of this
-			}
-
-			//TODO: try and get rid of shit like this
-			if (!userAccessLevels.containsKey(resourceName))
-				userAccessLevels.put(resourceName, new ArrayList<UserLevel>());
-
-			//If
-			if (userAccessLevels.isEmpty()) {
-				switch (requestType){
-					case CONCURRENT_READ_BLOCKING:
-					case CONCURRENT_READ_NONBLOCKING:
-						UserLevel level = new UserLevel(from, AccessType.CONCURRENT_READ);
-						userAccessLevels.get(resourceName).add(level);
-						from.tell(new AccessRequestGrantedMsg(request), getSelf());
-						log(LogMsg.makeAccessRequestGrantedLogMsg(from, getSelf(), request));
-						break;
-					case EXCLUSIVE_WRITE_BLOCKING:
-					case EXCLUSIVE_WRITE_NONBLOCKING:
-						UserLevel level2 = new UserLevel(from, AccessType.EXCLUSIVE_WRITE);
-						userAccessLevels.get(resourceName).add(level2);
-						from.tell(new AccessRequestGrantedMsg(request), getSelf());
-						log(LogMsg.makeAccessRequestGrantedLogMsg(from, getSelf(), request));
-						break;
-					default:
-						//Do nothing
-						break;
-				}
-			}
-			//Else it is not empty
-			else {
+			//Check if the resource is going to be disabled, and send the denial message if it is
+			if (toDisable.containsKey(resourceName) || resourceStatus == ResourceStatus.DISABLED)
+				denyRequestMessage(msg, from, "RESOURCE_DISABLED");
+			else { //Resource not being disabled, check if access can be granted
 				List<UserLevel> temp = userAccessLevels.get(resourceName);
-				boolean access = true;
 
-				for (int i = 0; i < temp.size(); i++) {
-					AccessType accessType = temp.get(i).getAccessType();
-					ActorRef user = temp.get(i).getUser();
-					if (accessType == AccessType.EXCLUSIVE_WRITE && ! user.equals(from)) {
-						access = false;
-						break;
+				//If there is other user access information for the resource, figure out what other kinds of access users have,
+				//and use that info to determine whether or not to grant access to the resource
+				if (!temp.isEmpty()) {
+					boolean access = true;
+
+					//If another user has exclusive write access, or another user had concurrent read access and the
+					//request is for exclusive write, deny the request. Re-entrant locking is supported, so if the user with
+					//access is the same one making the request, that will not automatically deny the request
+					for (int i = 0; i < temp.size(); i++) {
+						AccessType accessType = temp.get(i).getAccessType();
+						if (!from.equals(temp.get(i).getUser())) {
+							if (accessType == AccessType.CONCURRENT_READ) {
+								if (requestType == AccessRequestType.EXCLUSIVE_WRITE_BLOCKING || requestType == AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING)
+									access = false;
+							}
+							else if (accessType == AccessType.EXCLUSIVE_WRITE) {
+								access = false;
+							}
+						}
+						//If user is same as one in userAccessLevels do nothing, allow for re-entrant locking
+						//Do nothing
 					}
-					else if (accessType == AccessType.CONCURRENT_READ && !user.equals(from)) {
-						if (requestType == AccessRequestType.EXCLUSIVE_WRITE_BLOCKING || requestType == AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING) {
-							access = false;
-							break;
+
+					//If the user can access the resource, reply with an access granted message
+					if (access) {
+						switch(requestType) {
+							case CONCURRENT_READ_BLOCKING:
+							case CONCURRENT_READ_NONBLOCKING:
+								userAccessLevels.get(resourceName).add(new UserLevel(from, AccessType.CONCURRENT_READ));
+								break;
+							case EXCLUSIVE_WRITE_BLOCKING:
+							case EXCLUSIVE_WRITE_NONBLOCKING:
+								userAccessLevels.get(resourceName).add(new UserLevel(from, AccessType.EXCLUSIVE_WRITE));
+							default:
+								//Do nothing
+								break;
+						}
+						//Reply to sender with access request granted message
+						from.tell(new AccessRequestGrantedMsg(request), getSelf());
+						log(LogMsg.makeAccessRequestGrantedLogMsg(from, getSelf(), request));
+					}
+					//Else the user can't access the resource, reply with an access denied message
+					else {
+						//If request is blocking add it to blocking queue, otherwise send busy message to requester
+						switch(requestType) {
+							case CONCURRENT_READ_BLOCKING:
+							case EXCLUSIVE_WRITE_BLOCKING:
+								blockingAccessRequests.add(msg);
+								break;
+							case CONCURRENT_READ_NONBLOCKING:
+							case EXCLUSIVE_WRITE_NONBLOCKING:
+								denyRequestMessage(msg, from, "RESOURCE_BUSY");
+								break;
+							default:
+								//Do nothing
+								break;
 						}
 					}
 				}
-
-				//If the user can access the resource, reply with a access granted message
-				if (access) {
-					//TODO: rejigger this
-					UserLevel userLevel = null;
-					if (requestType == AccessRequestType.CONCURRENT_READ_BLOCKING || requestType == AccessRequestType.CONCURRENT_READ_NONBLOCKING) {
-						userLevel = new UserLevel(from, AccessType.CONCURRENT_READ);
-					}
-					else {
-						userLevel = new UserLevel(from, AccessType.EXCLUSIVE_WRITE);
-					}
-
-					userAccessLevels.get(resourceName).add(userLevel);
-					from.tell(new AccessRequestGrantedMsg(request), getSelf()); //TODO: Is this right?
-					log(LogMsg.makeAccessRequestGrantedLogMsg(from, getSelf(), request));
-				}
-				//Else the user can't access the resource, reply with an access denied message
+				//If no other users have access to the resource, grant the request automatically
 				else {
-					if (requestType == AccessRequestType.CONCURRENT_READ_BLOCKING || requestType == AccessRequestType.EXCLUSIVE_WRITE_BLOCKING)
-						blockingAccessRequests.add(msg);
-					else {
-						from.tell(new AccessRequestDeniedMsg(request, AccessRequestDenialReason.RESOURCE_BUSY), getSelf());
-						log(LogMsg.makeAccessRequestDeniedLogMsg(from, getSelf(), request, AccessRequestDenialReason.RESOURCE_BUSY));
+					switch (requestType){
+						case CONCURRENT_READ_BLOCKING:
+						case CONCURRENT_READ_NONBLOCKING:
+							userAccessLevels.get(resourceName).add(new UserLevel(from, AccessType.CONCURRENT_READ));
+							from.tell(new AccessRequestGrantedMsg(request), getSelf());
+							log(LogMsg.makeAccessRequestGrantedLogMsg(from, getSelf(), request));
+							break;
+						case EXCLUSIVE_WRITE_BLOCKING:
+						case EXCLUSIVE_WRITE_NONBLOCKING:
+							userAccessLevels.get(resourceName).add(new UserLevel(from, AccessType.EXCLUSIVE_WRITE));
+							from.tell(new AccessRequestGrantedMsg(request), getSelf());
+							log(LogMsg.makeAccessRequestGrantedLogMsg(from, getSelf(), request));
+							break;
+						default:
+							//Do nothing
+							break;
 					}
 				}
 			}
 		}
 		else { //If resource does not exist locally, either redirect the request if we know where to go, or find it if we dont
-			if (remoteResources.containsKey(resourceName)) { //We know where to go, so redirect the message there
-				ActorRef remoteManager = remoteResources.get(resourceName);
-				remoteManager.tell(msg, getSelf());
-				log(LogMsg.makeAccessRequestForwardedLogMsg(getSelf(), remoteManager, request));
-			}
-			else { //We don't know where it is, so we have to look for it in the system
+			if (remoteResources.containsKey(resourceName)) //If location is known, forward the message
+				forwardRequestMessage(msg, remoteResources.get(resourceName), from);
+			else  //Otherwise, search the whole system for the resource location
 				searchUnknownRemote(msg);
-			}
 		}
 	}
 
-	//TODO
 	//Process incoming access release messages, acknowledging that a resource has been released somewhere in the system
 	private void AccessReleaseHandler(AccessReleaseMsg msg, ActorRef from) {
 		AccessRelease accessRelease = msg.getAccessRelease();
 		String resourceName = accessRelease.getResourceName();
 		AccessType accessType = accessRelease.getType();
-		boolean hasResource = localResources.containsKey(resourceName);
-
 		log(LogMsg.makeAccessReleaseReceivedLogMsg(from, getSelf(), accessRelease)); //Log access release msg received
 
-		if (hasResource) { //If the resource is local to this manager, process it here
+		//If the resource is local to this manager, process it here
+		if (localResources.containsKey(resourceName)) {
 			List<UserLevel> temp = userAccessLevels.get(resourceName);
-			boolean canAccess = false;
 
-			for (int i = 0; i < temp.size(); i++) { //Iterate through list of users with access levels on the resource
+			//Iterate through list of users with access levels on the resource
+			for (int i = 0; i < temp.size(); i++) {
 				UserLevel accessLevel = temp.get(i);
-				if (accessLevel.getUser().equals(from)) { //If the user is in the accessLevel list
-					if (accessLevel.getAccessType().equals(accessType)) { //And access type is the same as in the request
-						//Remove the user from the access list, set canAccess true, and log
-						temp.remove(accessLevel); //TODO: Is this right?
-						canAccess = true;
-						log(LogMsg.makeAccessReleasedLogMsg(from, getSelf(), accessRelease));
-					}
+				if (accessLevel.getUser().equals(from) && accessLevel.getAccessType().equals(accessType)) { //If the user is in the accessLevel list
+					//Remove the user from the access list and log
+					temp.remove(accessLevel);
+					log(LogMsg.makeAccessReleasedLogMsg(from, getSelf(), accessRelease));
+					break;
+				}
+				//If user does not have any
+				else if (i == temp.size()) {
+					log(LogMsg.makeAccessReleaseIgnoredLogMsg(from, getSelf(), accessRelease));
 				}
 			}
 
-			//If the user can't access the message, log that the release was ignored, don't send a response
-			if (!canAccess)
-				log(LogMsg.makeAccessReleaseIgnoredLogMsg(from, getSelf(), accessRelease));
-
-			if (temp.size() == 0) { //If there are no users whomst have tried to access the resource, check the toDisable requests
+			//If there are no users whomst have tried to access the resource, iterate through the toDisable requests
+			//and send messages granting their requests
+			if (temp.isEmpty()) {
 				if (toDisable.containsKey(resourceName) && localResources.get(resourceName).getStatus() == ResourceStatus.ENABLED) {
 					localResources.get(resourceName).disable(); //Disable the resource
 					log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), resourceName, localResources.get(resourceName).getStatus()));
@@ -273,7 +278,6 @@ public class ResourceManagerActor extends UntypedActor {
 					for (int i = 0; i < messages.size(); i++) {
 						ManagementRequest request = messages.get(i).getRequest();
 						ActorRef target = messages.get(i).getReplyTo();
-						//toDisable.get(resourceName).get(i)
 
 						target.tell(new ManagementRequestGrantedMsg(request), getSelf());
 						log(LogMsg.makeManagementRequestGrantedLogMsg(target, getSelf(), request));
@@ -282,27 +286,58 @@ public class ResourceManagerActor extends UntypedActor {
 			}
 		}
 		else { //If the resource is not local, attempt to find where it exists, and forward the message
-			if (remoteResources.containsKey(resourceName)) { //If the location of this resource has already been found
-				//Forward the message to the resource location, keeping the sender the same
-				ActorRef remoteSource = remoteResources.get(resourceName);
-				remoteSource.tell(msg, from);
-				log(LogMsg.makeAccessReleaseForwardedLogMsg(getSelf(), remoteSource, accessRelease));
-			}
-			else { //If we don't know where the resource is, we need to find it
+			if (remoteResources.containsKey(resourceName))  //If the location is known, forward the message
+				forwardRequestMessage(msg, remoteResources.get(resourceName), from);
+			else //Otherwise, search the entire system for the resource location
 				searchUnknownRemote(msg);
+		}
+		//After releasing access to resources, check in the blockingAccessRequests for the ability to fulfill any of them
+		//now that an element has had its access released
+		if (!blockingAccessRequests.isEmpty()) { //If the blockingAccess queue has elements, iterate through them
+			Iterator<AccessRequestMsg> iter = blockingAccessRequests.iterator();
+			while (iter.hasNext()) {
+				AccessRequestMsg message = iter.next();
+				AccessRequest request = message.getAccessRequest();
+				AccessRequestType requestType = request.getType();
+
+				//Iterate through user access levels to check access level of other users of this resource
+				List<UserLevel> temp = userAccessLevels.get(resourceName);
+				for (int i = 0; i < temp.size(); i++) {
+					AccessType type = temp.get(i).getAccessType();
+					ActorRef user = temp.get(i).getUser();
+
+					//If this user is not the sender, check its access level
+					if (!msg.getSender().equals(user)) {
+						if (type == AccessType.CONCURRENT_READ) { //Another user has concurrent read access, can grant if our request is also to read
+							if (requestType == AccessRequestType.EXCLUSIVE_WRITE_BLOCKING || requestType == AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING)
+								break;
+						}
+						else if (type == AccessType.EXCLUSIVE_WRITE) //Another user has exclusive write access, cant grant request
+							break;
+					}
+
+					//Checked all other users of the resource at this point
+					//If user can now access resource, send access granted message and remove element from blocking queue
+					if (i == temp.size()) {
+						AccessRequestBlocking block = new AccessRequestBlocking(message, true);
+						AccessRequestHandler(block, message.getReplyTo());
+						log(LogMsg.makeAccessRequestGrantedLogMsg(message.getReplyTo(), getSelf(), request));
+						iter.remove();
+					}
+				}
 			}
+			//Finished checking blocking queue at this point
 		}
 	}
 
-	//TODO
+	//Handles incoming ManagementRequestMsg
 	private void ManagementRequestHandler(ManagementRequestMsg msg, ActorRef from) {
 		ManagementRequest managementRequest = msg.getRequest();
 		String resourceName = managementRequest.getResourceName();
-		boolean hasResource = localResources.containsKey(resourceName);
 		log(LogMsg.makeManagementRequestReceivedLogMsg(from, getSelf(), managementRequest));
 
 		//If resource in question is managed locally, process it in place
-		if (hasResource) {
+		if (localResources.containsKey(resourceName)) {
 			Resource res = localResources.get(resourceName);
 			ResourceStatus status = res.getStatus();
 			//If the request is to ENABLE, this is the easy case
@@ -312,8 +347,8 @@ public class ResourceManagerActor extends UntypedActor {
 				}
 				else if (status == ResourceStatus.DISABLED) { //If disabled, enable it, remove from queue of messages to be disabled, and log
 					res.enable();
-					toDisable.remove(resourceName);
 					log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), resourceName, ResourceStatus.DISABLED));
+					toDisable.remove(resourceName);
 				}
 				//Finally, reply with a request granted message to whoever made the request, and log this message was sent
 				from.tell(new ManagementRequestGrantedMsg(managementRequest), getSelf());
@@ -321,178 +356,102 @@ public class ResourceManagerActor extends UntypedActor {
 			}
 			//If the request is to DISABLE, this is the more complicated case
 			else if (managementRequest.getType() == ManagementRequestType.DISABLE) {
-				//If resource is already disabled, just reply with the request granted to the asker: no work to do
+				//If resource is already disabled, just reply with the request granted to the requester: no work to do
 				if (status == ResourceStatus.DISABLED) {
 					from.tell(new ManagementRequestGrantedMsg(managementRequest), getSelf());
 					log(LogMsg.makeManagementRequestGrantedLogMsg(from, getSelf(), managementRequest));
 				}
 				//If the resource is already enabled, it's trickier
 				else if (status == ResourceStatus.ENABLED) {
-					List<UserLevel> temp;
-					boolean disableFlag = true;
-					if (!userAccessLevels.containsKey(resourceName)){
-						temp = new ArrayList<UserLevel>();
-						userAccessLevels.put(resourceName, temp);
-					}
-					else {
-						temp = userAccessLevels.get(resourceName);
-					}
-
-					//Iterate through userAccessLevels for the specified resource and flag the boolean if the DISABLE request
-					//is coming from an actor who has already has an access level for the resource
+					List<UserLevel> temp = userAccessLevels.get(resourceName);
+					//Check to see if this user holds an access level for this resource
 					for (int i = 0; i < temp.size(); i++) {
-						if (temp.get(i).getUser().equals(from))
-							disableFlag = false;
-					}
-
-					//If user does not have access to resource already, keep processing request
-					if (disableFlag) {
-						//Iterate through access blocking queue and find out if any requests are waiting on the resource from
-						//the original message. If they are, deny the request because the resource is disabled
-						//TODO: Can probably fix this
-						Iterator<AccessRequestMsg> accessIter = blockingAccessRequests.iterator();
-						while (accessIter.hasNext()) {
-							AccessRequestMsg mess = accessIter.next();
-							if (resourceName.equals(mess.getAccessRequest().getResourceName())) {
-								from.tell(new AccessRequestDeniedMsg(mess, AccessRequestDenialReason.RESOURCE_DISABLED), getSelf());
-								log(LogMsg.makeAccessRequestDeniedLogMsg(from, getSelf(), mess.getAccessRequest(), AccessRequestDenialReason.RESOURCE_DISABLED));
-							}
-						}
-						if (temp.isEmpty()) { //If the list is empty/iteration didnt happen, disable the resource
-							localResources.get(resourceName).disable();
-							log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), resourceName, status));
-
-							if (!toDisable.containsKey(resourceName)) {
-								List<ManagementRequestMsg> list = new LinkedList<ManagementRequestMsg>();
-								toDisable.put(resourceName, list);
-							}
-							toDisable.get(resourceName).add(msg);
-							from.tell(new ManagementRequestGrantedMsg(managementRequest), getSelf());
-							log(LogMsg.makeManagementRequestGrantedLogMsg(from, getSelf(), managementRequest));
-						}
-						else {
-							if (!toDisable.containsKey(resourceName)) {
-								List<ManagementRequestMsg> list = new LinkedList<ManagementRequestMsg>();
-								toDisable.put(resourceName, list);
-							}
-							toDisable.get(resourceName).add(msg);
+						if (from.equals(temp.get(i).getUser())) { //If user already has access, deny request and return method
+							denyRequestMessage(msg, from, "ACCESS_HELD_BY_USER");
+							return;
 						}
 					}
-					else { //User already has access to the resource, deny their request
-						from.tell(new ManagementRequestDeniedMsg(managementRequest, ManagementRequestDenialReason.ACCESS_HELD_BY_USER), getSelf());
-						log(LogMsg.makeManagementRequestDeniedLogMsg(from, getSelf(), managementRequest, ManagementRequestDenialReason.ACCESS_HELD_BY_USER));
+					//If user does not already have access, disable the resource
+					if (temp.isEmpty()) { //If no previous disable requests made, disable the resource and respond with request granted
+						localResources.get(resourceName).disable();
+						log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), resourceName, status));
+						from.tell(new ManagementRequestGrantedMsg(managementRequest), getSelf());
+						log(LogMsg.makeManagementRequestGrantedLogMsg(from, getSelf(), managementRequest));
+					}
+					toDisable.get(resourceName).add(msg); //Add request to disable queue
+
+					//Deny access to all messages queued for the resource
+					Iterator<AccessRequestMsg> accessIter = blockingAccessRequests.iterator();
+					while (accessIter.hasNext()) {
+						AccessRequestMsg mess = accessIter.next();
+						if (resourceName.equals(mess.getAccessRequest().getResourceName()))
+							denyRequestMessage(msg, from, "RESOURCE_DISABLED");
 					}
 				}
 			}
 		}
 		//If resource is not managed locally, either find it from a known remote source, or search the system for it
 		else {
-			//If the resource is with a known manager, reroute the request there
-			if (remoteResources.containsKey(resourceName)) {
-				ActorRef remoteManager = remoteResources.get(resourceName);
-				remoteManager.tell(msg, from);
-				log(LogMsg.makeManagementRequestForwardedLogMsg(getSelf(), remoteManager, managementRequest));
-			}
-			else {
+			if (remoteResources.containsKey(resourceName)) //If the resource is with a known manager, reroute the request there
+				forwardRequestMessage(msg, remoteResources.get(resourceName), from);
+			else //Otherwise, search the system for the resource location
 				searchUnknownRemote(msg);
-			}
 		}
 	}
 
 	//Checks to see if this resource manager has the resource in question, and sends a response with the result
 	//to whatever resource manager sent the request
 	private void WhoHasResourceRequestHandler(WhoHasResourceRequestMsg msg, ActorRef from) {
-		String resourceName = msg.getResourceName();
-		boolean hasResource = localResources.containsKey(resourceName); //True if this manager has the resource locally
-
-		//Reply to sender with status about whether or not this manager has the requested resource locally
-		from.tell(new WhoHasResourceResponseMsg(resourceName, hasResource, getSelf()), getSelf());
+		from.tell(new WhoHasResourceResponseMsg(msg.getResourceName(), localResources.containsKey(msg.getResourceName()), getSelf()), getSelf());
 	}
 
-
+	//Parses result from WhoHasResourceResponse. If result is true that manager has the resource locally, so forward
+	//all pending messages to that manager. If result is false that manager does not have the resource. If the counter
+	//mapped to the resource hits 0 no managers in the system have the resource, so it does not exist. In that case
+	//iterate through all pending messages for that resource and deny their requests
 	private void WhoHasResourceResponseHandler(WhoHasResourceResponseMsg msg, ActorRef from) {
-		boolean hasResource = msg.getResult();
 		String resourceName = msg.getResourceName();
 
-		if (!hasResource) { //Respondent does not have resource available locally
-			if (unknownRemoteMap.get(resourceName) != null) {
+		if (!msg.getResult()) { //Respondent does not have resource available locally
+			if (unknownRemoteMap.get(resourceName) != null && unknownRemoteMap.get(resourceName).get(0) != null) {
 				HashMap<Object, Integer> unknown = unknownRemoteMap.get(resourceName).get(0);
-				if (unknown != null) {
-					Object mess = unknown.keySet().toArray()[0]; //Should only be 1 key per HashMap, just a K/V pair
-					unknown.put(mess, unknown.get(mess) - 1); //Decrement count by 1
-					if (unknown.get(mess) == 0) {
-						List<HashMap<Object, Integer>> temp = unknownRemoteMap.get(resourceName);
-						for (int i = 0; i < temp.size(); i++) {
-							HashMap<Object, Integer> unk = temp.get(i);
-							if (mess instanceof AccessRequestMsg) {
-								AccessRequestMsg message = (AccessRequestMsg)mess;
-								AccessRequest request = message.getAccessRequest();
-								from.tell(new AccessRequestDeniedMsg(request, AccessRequestDenialReason.RESOURCE_NOT_FOUND), getSelf());
-								log(LogMsg.makeAccessRequestDeniedLogMsg(getSelf(), from, request, AccessRequestDenialReason.RESOURCE_NOT_FOUND));
-							}
-							else if (mess instanceof AccessReleaseMsg) {
-								AccessReleaseMsg message = (AccessReleaseMsg)mess;
-								AccessRelease release = message.getAccessRelease();
+				Object mess = unknownRemoteMap.get(resourceName).get(0).keySet().toArray()[0]; //Should only be 1 key per HashMap, just a K/V pair
 
-								log(LogMsg.makeAccessReleaseIgnoredLogMsg(from, getSelf(), release));
-							}
-							else if (mess instanceof ManagementRequestMsg) {
-								ManagementRequestMsg message = (ManagementRequestMsg) mess;
-								ManagementRequest management = message.getRequest();
-								from.tell(new ManagementRequestDeniedMsg(management, ManagementRequestDenialReason.RESOURCE_NOT_FOUND), getSelf());
-								log(LogMsg.makeManagementRequestDeniedLogMsg(from, getSelf(), management, ManagementRequestDenialReason.RESOURCE_NOT_FOUND));
-							}
-						}
-						unknownRemoteMap.remove(resourceName);
+				unknown.put(mess, unknown.get(mess) - 1);
+				if (unknown.get(mess) == 0) { //If count is 0 no manager on the system has the resource, it does not exist. Reply with denial messages
+					List<HashMap<Object, Integer>> temp = unknownRemoteMap.get(resourceName);
+					for (int i = 0; i < temp.size(); i++) { //Send response to every manager waiting on resource information
+						denyRequestMessage(mess, from, "RESOURCE_NOT_FOUND");
 					}
+					unknownRemoteMap.remove(resourceName); //Remove resource from unknown map, we know it does not exist
 				}
 			}
 		}
-		else { //Respondent has the resource locally, so go through stored messages and update with the location
-			log(LogMsg.makeRemoteResourceDiscoveredLogMsg(getSelf(), from, resourceName));
-
+		else { //Respondent has the resource locally, so go through stored messages and forward to correct manager
 			List<HashMap<Object, Integer>> temp = unknownRemoteMap.get(resourceName);
 			if (temp != null) {
 				for (int i = 0; i < temp.size(); i++) {
 					HashMap<Object, Integer> unk = temp.get(i);
-					Object mess = unk.keySet().toArray()[0]; //Should only be 1 key per HashMap, just a K/V pair
-					if (mess instanceof AccessRequestMsg) {
-						AccessRequestMsg message = (AccessRequestMsg)mess;
-						AccessRequest request = message.getAccessRequest();
-						from.tell(message, getSelf());
-						log(LogMsg.makeAccessRequestForwardedLogMsg(getSelf(), from, request));
-					}
-					else if (mess instanceof AccessReleaseMsg) {
-						AccessReleaseMsg message = (AccessReleaseMsg)mess;
-						AccessRelease release = message.getAccessRelease();
-						from.tell(message, getSelf());
-						log(LogMsg.makeAccessReleaseForwardedLogMsg(getSelf(), from, release));
-					}
-					else if (mess instanceof ManagementRequestMsg) {
-						ManagementRequestMsg message = (ManagementRequestMsg)mess;
-						ManagementRequest management = message.getRequest();
-						from.tell(message, getSelf());
-						log(LogMsg.makeManagementRequestForwardedLogMsg(getSelf(), from, management));
-					}
+					Object mess = unk.keySet().toArray()[0];
+					forwardRequestMessage(mess, from, getSelf());
 				}
+				//Remove resource from unknown map and add it to known locations map for easier access
 				unknownRemoteMap.remove(resourceName);
 				remoteResources.put(resourceName, from);
+				log(LogMsg.makeRemoteResourceDiscoveredLogMsg(getSelf(), from, resourceName));
 			}
 		}
 	}
 
-	//Below here are private helper methods that are not called by onReceive directly, but are secondary
-	//helpers to the message handlers
 
 	//When a request comes in and the resource is not stored locally or in a known remote, this method is used to
 	//both send out WhoHasResourceRequestMsg to all known managers in the system, as well as update the local
 	//unknownRemoteResources list to process during WhoHasResourceResponseMsg
-	//TODO: Do this better
 	private void searchUnknownRemote(Object requestMsg) {
 		if (requestMsg instanceof AccessRequestMsg) {
 			AccessRequestMsg accessRequest = (AccessRequestMsg)requestMsg;
 			String resourceName = accessRequest.getAccessRequest().getResourceName();
-			HashMap<Object, Integer> unknown = new HashMap<Object, Integer>();
+			HashMap<Object, Integer> unknown = new HashMap<>();
 			unknown.put(accessRequest, 0);
 
 			if (unknownRemoteMap.containsKey(resourceName)) //If resource is already in map, add new request to existing list
@@ -500,7 +459,7 @@ public class ResourceManagerActor extends UntypedActor {
 			else { //Otherwise, look at all system managers and send resource request messages to all of them for current resource
 				int i = 0;
 				while (i < systemManagers.size()) {
-					//Increment count
+					//Increment count of managers queried
 					unknown.put(accessRequest, unknown.get(accessRequest) + 1);
 					ActorRef manager = systemManagers.get(i);
 					manager.tell(new WhoHasResourceRequestMsg(resourceName, getSelf()), getSelf());
@@ -508,7 +467,7 @@ public class ResourceManagerActor extends UntypedActor {
 				}
 
 				//Finally, add resource with request message to unknownResourceMap
-				List<HashMap<Object, Integer>> temp = new LinkedList<HashMap<Object, Integer>>();
+				List<HashMap<Object, Integer>> temp = new LinkedList<>();
 				temp.add(unknown);
 				unknownRemoteMap.put(resourceName, temp);
 			}
@@ -516,7 +475,7 @@ public class ResourceManagerActor extends UntypedActor {
 		else if (requestMsg instanceof AccessReleaseMsg) {
 			AccessReleaseMsg releaseRequest = (AccessReleaseMsg)requestMsg;
 			String resourceName = releaseRequest.getAccessRelease().getResourceName();
-			HashMap<Object, Integer> unknown = new HashMap<Object, Integer>();
+			HashMap<Object, Integer> unknown = new HashMap<>();
 			unknown.put(releaseRequest, 0);
 
 			if (unknownRemoteMap.containsKey(resourceName)) //If resource is already in map, add new request to existing list
@@ -524,7 +483,7 @@ public class ResourceManagerActor extends UntypedActor {
 			else { //Otherwise, look at all system managers and send resource request messages to all of them for current resource
 				int i = 0;
 				while (i < systemManagers.size()) {
-					//Increment count
+					//Increment count of managers queried
 					unknown.put(releaseRequest, unknown.get(releaseRequest) + 1);
 					ActorRef manager = systemManagers.get(i);
 					manager.tell(new WhoHasResourceRequestMsg(resourceName, getSelf()), getSelf());
@@ -532,7 +491,7 @@ public class ResourceManagerActor extends UntypedActor {
 				}
 
 				//Finally, add resource with request message to unknownResourceMap
-				List<HashMap<Object, Integer>> temp = new LinkedList<HashMap<Object, Integer>>();
+				List<HashMap<Object, Integer>> temp = new LinkedList<>();
 				temp.add(unknown);
 				unknownRemoteMap.put(resourceName, temp);
 			}
@@ -540,7 +499,7 @@ public class ResourceManagerActor extends UntypedActor {
 		else if (requestMsg instanceof ManagementRequestMsg) {
 			ManagementRequestMsg managementRequest = (ManagementRequestMsg)requestMsg;
 			String resourceName = managementRequest.getRequest().getResourceName();
-			HashMap<Object, Integer> unknown = new HashMap<Object, Integer>();
+			HashMap<Object, Integer> unknown = new HashMap<>();
 			unknown.put(managementRequest, 0);
 
 			if (unknownRemoteMap.containsKey(resourceName)) //If resource is already in map, add new request to existing list
@@ -548,7 +507,7 @@ public class ResourceManagerActor extends UntypedActor {
 			else { //Otherwise, look at all system managers and send resource request messages to all of them for current resource
 				int i = 0;
 				while (i < systemManagers.size()) {
-					//Increment count
+					//Increment count of managers queried
 					unknown.put(managementRequest, unknown.get(managementRequest) + 1);
 					ActorRef manager = systemManagers.get(i);
 					manager.tell(new WhoHasResourceRequestMsg(resourceName, getSelf()), getSelf());
@@ -556,10 +515,77 @@ public class ResourceManagerActor extends UntypedActor {
 				}
 
 				//Finally, add resource with request message to unknownResourcesMap
-				List<HashMap<Object, Integer>> temp = new LinkedList<HashMap<Object, Integer>>();
+				List<HashMap<Object, Integer>> temp = new LinkedList<>();
 				temp.add(unknown);
 				unknownRemoteMap.put(resourceName, temp);
 			}
+		}
+	}
+
+	//Helper method to forward an incoming message to a known remote manager
+	//Parses message for type, then forwards it to the actor passed in as parameter, and logs the forwarding
+	private void forwardRequestMessage(Object msg, ActorRef forwardTo, ActorRef from) {
+		if (msg instanceof AccessRequestMsg) {
+			AccessRequestMsg message = (AccessRequestMsg)msg;
+			forwardTo.tell(message, from);
+			log(LogMsg.makeAccessRequestForwardedLogMsg(getSelf(), forwardTo, message.getAccessRequest()));
+		}
+		else if (msg instanceof AccessReleaseMsg) {
+			AccessReleaseMsg message = (AccessReleaseMsg)msg;
+			forwardTo.tell(message, from);
+			log(LogMsg.makeAccessReleaseForwardedLogMsg(getSelf(), forwardTo, message.getAccessRelease()));
+		}
+		else if (msg instanceof ManagementRequestMsg) {
+			ManagementRequestMsg message = (ManagementRequestMsg)msg;
+			forwardTo.tell(message, from);
+			log(LogMsg.makeManagementRequestForwardedLogMsg(getSelf(), forwardTo, message.getRequest()));
+		}
+	}
+
+	//Helper method to easily deny any kind of request message
+	private void denyRequestMessage(Object msg, ActorRef from, String denialReason) {
+		AccessRequestMsg request;
+		ManagementRequestMsg management;
+		AccessReleaseMsg release;
+
+		switch (denialReason) {
+			case "RESOURCE_NOT_FOUND":
+				if (msg instanceof AccessRequestMsg) {
+					request = (AccessRequestMsg)msg;
+					from.tell(new AccessRequestDeniedMsg(request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_NOT_FOUND), getSelf());
+					log(LogMsg.makeAccessRequestDeniedLogMsg(getSelf(), from, request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_NOT_FOUND));
+				}
+				else if (msg instanceof ManagementRequestMsg) {
+					management = (ManagementRequestMsg)msg;
+					from.tell(new ManagementRequestDeniedMsg(management.getRequest(), ManagementRequestDenialReason.RESOURCE_NOT_FOUND), getSelf());
+					log(LogMsg.makeManagementRequestDeniedLogMsg(from, getSelf(), management.getRequest(), ManagementRequestDenialReason.RESOURCE_NOT_FOUND));
+				}
+				//Not applicable for release messages, but makes WhoHasResourceResponseHandler a little neater
+				else if (msg instanceof AccessReleaseMsg) {
+					release = (AccessReleaseMsg)msg;
+					log(LogMsg.makeAccessReleaseIgnoredLogMsg(from, getSelf(), release.getAccessRelease()));
+				}
+				break;
+			case "RESOURCE_BUSY":
+				request = (AccessRequestMsg)msg;
+				from.tell(new AccessRequestDeniedMsg(request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_BUSY), getSelf());
+				log(LogMsg.makeAccessRequestDeniedLogMsg(from, getSelf(), request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_BUSY));
+				break;
+			case "RESOURCE_DISABLED":
+				request = (AccessRequestMsg)msg;
+				from.tell(new AccessRequestDeniedMsg(request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_DISABLED), getSelf());
+				log(LogMsg.makeAccessRequestDeniedLogMsg(from, getSelf(), request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_DISABLED));
+				break;
+			case "ACCESS_HELD_BY_USER":
+				management = (ManagementRequestMsg)msg;
+				from.tell(new ManagementRequestDeniedMsg(management.getRequest(), ManagementRequestDenialReason.ACCESS_HELD_BY_USER), getSelf());
+				log(LogMsg.makeManagementRequestDeniedLogMsg(from, getSelf(), management.getRequest(), ManagementRequestDenialReason.ACCESS_HELD_BY_USER));
+				break;
+			default:
+				//Ignore bad access release message
+				release = (AccessReleaseMsg)msg;
+				log(LogMsg.makeAccessReleaseIgnoredLogMsg(from, getSelf(), release.getAccessRelease()));
+				break;
 		}
 	}
 
@@ -602,41 +628,6 @@ public class ResourceManagerActor extends UntypedActor {
 		else if (msg instanceof AccessReleaseMsg) {
 			AccessReleaseMsg releaseMsg = (AccessReleaseMsg)msg;
 			AccessReleaseHandler(releaseMsg, releaseMsg.getSender());
-
-			//After releasing access to resources, check in the blockingAccessRequests for the ability to fufill any of them
-			//now that an element has had its access released
-			if (!blockingAccessRequests.isEmpty()) {
-				Iterator<AccessRequestMsg> iter = blockingAccessRequests.iterator();
-				while (iter.hasNext()) {
-					AccessRequestMsg message = iter.next();
-					AccessRequest request = message.getAccessRequest();
-					String resourceName = request.getResourceName();
-					AccessRequestType requestType = request.getType();
-
-					List<UserLevel> temp = userAccessLevels.get(resourceName);
-					boolean access = true;
-
-					for (int i = 0; i < temp.size(); i++) {
-						AccessType type = temp.get(i).getAccessType();
-						ActorRef user = temp.get(i).getUser();
-
-						if (type == AccessType.EXCLUSIVE_WRITE && !user.equals(releaseMsg.getSender()))
-							access = false;
-						else if (type == AccessType.CONCURRENT_READ && !user.equals(releaseMsg.getSender())) {
-							if (requestType == AccessRequestType.EXCLUSIVE_WRITE_BLOCKING || requestType == AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING)
-								access = false;
-						}
-					}
-
-					if (access) {
-						AccessRequestBlocking block = new AccessRequestBlocking(message, true);
-						AccessRequestHandler(block, message.getReplyTo());
-						iter.remove();
-					}
-					else
-						break;
-				}
-			}
 		}
 		//Reply to the user that sent the ManagementRequestMsg
 		else if (msg instanceof ManagementRequestMsg) {

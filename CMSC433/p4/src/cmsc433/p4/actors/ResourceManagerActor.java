@@ -144,7 +144,7 @@ public class ResourceManagerActor extends UntypedActor {
 		if (localResources.containsKey(resourceName)) {
 			AccessRequestType requestType = request.getType();
 			ResourceStatus resourceStatus = localResources.get(resourceName).getStatus();
-			//Check if the resource is going to be disabled, and send the denial message if it is
+			//Check if the resource is going to be disabled or already is disabled, and send denial message to incoming requests
 			if ((toDisable.get(resourceName) != null && !toDisable.get(resourceName).isEmpty()) || resourceStatus == ResourceStatus.DISABLED) {
 				from.tell(new AccessRequestDeniedMsg(request, AccessRequestDenialReason.RESOURCE_DISABLED), getSelf());
 				log(LogMsg.makeAccessRequestDeniedLogMsg(from, getSelf(), request, AccessRequestDenialReason.RESOURCE_DISABLED));
@@ -161,12 +161,12 @@ public class ResourceManagerActor extends UntypedActor {
 					//access is the same one making the request, that will not automatically deny the request
 					for (int i = 0; i < temp.size(); i++) {
 						AccessType accessType = temp.get(i).getAccessType();
-						if (!from.equals(temp.get(i).getUser())) {
-							if (accessType == AccessType.CONCURRENT_READ) { //If youre requesting write and another user has read, cant access
+						if (!from.equals(temp.get(i).getUser())) { //If user is not the same as the requesting user
+							if (accessType.equals(AccessType.CONCURRENT_READ)) { //If you're requesting write and another user has read, cant access
 								if (requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_BLOCKING) || requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING))
 									access = false;
 							}
-							else if (accessType == AccessType.EXCLUSIVE_WRITE) { //If another user has write access, cant get access
+							else if (accessType.equals(AccessType.EXCLUSIVE_WRITE)) { //If another user has write access, cant get access
 								access = false;
 							}
 						}
@@ -174,7 +174,8 @@ public class ResourceManagerActor extends UntypedActor {
 						//Do nothing
 					}
 
-					//If the user can access the resource, reply with an access granted message
+					//If the user can access the resource, reply with an access granted message and add user access
+					//information to resourceManager
 					if (access) {
 						switch(requestType) {
 							case CONCURRENT_READ_BLOCKING:
@@ -192,7 +193,8 @@ public class ResourceManagerActor extends UntypedActor {
 						from.tell(new AccessRequestGrantedMsg(request), getSelf());
 						log(LogMsg.makeAccessRequestGrantedLogMsg(from, getSelf(), request));
 					}
-					//Else the user can't access the resource, reply with an access denied message
+					//Else the user can't access the resource, reply with an access denied message if its nonblocking,
+					//or add to blockingAccessRequests if it is
 					else {
 						//If request is blocking add it to blocking queue, otherwise send busy message to requester
 						switch(requestType) {
@@ -217,19 +219,18 @@ public class ResourceManagerActor extends UntypedActor {
 						case CONCURRENT_READ_BLOCKING:
 						case CONCURRENT_READ_NONBLOCKING:
 							userAccessLevels.get(resourceName).add(new UserLevel(from, AccessType.CONCURRENT_READ));
-							from.tell(new AccessRequestGrantedMsg(request), getSelf());
-							log(LogMsg.makeAccessRequestGrantedLogMsg(from, getSelf(), request));
 							break;
 						case EXCLUSIVE_WRITE_BLOCKING:
 						case EXCLUSIVE_WRITE_NONBLOCKING:
 							userAccessLevels.get(resourceName).add(new UserLevel(from, AccessType.EXCLUSIVE_WRITE));
-							from.tell(new AccessRequestGrantedMsg(request), getSelf());
-							log(LogMsg.makeAccessRequestGrantedLogMsg(from, getSelf(), request));
 							break;
 						default:
 							//Do nothing
 							break;
 					}
+					//Reply granting request, and log
+					from.tell(new AccessRequestGrantedMsg(request), getSelf());
+					log(LogMsg.makeAccessRequestGrantedLogMsg(from, getSelf(), request));
 				}
 			}
 		}
@@ -275,7 +276,6 @@ public class ResourceManagerActor extends UntypedActor {
 			if (temp.isEmpty()) {
 				if ((toDisable.get(resourceName) != null && !toDisable.get(resourceName).isEmpty()) && localResources.get(resourceName).getStatus() == ResourceStatus.ENABLED) {
 					localResources.get(resourceName).disable(); //Disable the resource
-					log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), resourceName, localResources.get(resourceName).getStatus()));
 
 					//Iterate through list of pending disable messages for the resource in question, and reply to them
 					//with the news that the resource has been disabled
@@ -286,6 +286,7 @@ public class ResourceManagerActor extends UntypedActor {
 
 						target.tell(new ManagementRequestGrantedMsg(request), getSelf());
 						log(LogMsg.makeManagementRequestGrantedLogMsg(target, getSelf(), request));
+						log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), resourceName, localResources.get(resourceName).getStatus()));
 					}
 				}
 			}
@@ -305,31 +306,29 @@ public class ResourceManagerActor extends UntypedActor {
 				AccessRequest request = message.getAccessRequest();
 				AccessRequestType requestType = request.getType();
 
-				//Iterate through user access levels to check access level of other users of this resource
+				//Iterate through user access levels of the resource in the blocking request in order to see if it
+				//can now be granted
 				boolean access = true;
-				List<UserLevel> lst = userAccessLevels.get(resourceName);
+				List<UserLevel> lst = userAccessLevels.get(request.getResourceName());
 				for (int i = 0; i < lst.size(); i++) {
-					AccessType type = lst.get(i).getAccessType();
+					AccessType accType = lst.get(i).getAccessType();
 					ActorRef user = lst.get(i).getUser();
 
 					//If this user is not the sender, check its access level
-					if (!msg.getSender().equals(user)) {
-						if (type == AccessType.CONCURRENT_READ) { //Another user has concurrent read access, can grant if our request is also to read
+					if (!user.equals(from)) {
+						if (accType == AccessType.CONCURRENT_READ) { //Another user has concurrent read access, can grant if our request is also to read
 							if (requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_BLOCKING) || requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING))
 								access = false;
-						} else if (type == AccessType.EXCLUSIVE_WRITE) //Another user has exclusive write access, cant grant request
+						} else if (accType.equals(AccessType.EXCLUSIVE_WRITE))  //Another user has exclusive write access, cant grant request
 							access = false;
 					}
 				}
 				//Checked all other users of the resource at this point, made it to end of list
-				//If user can now access resource, send access granted message and remove element from blocking queue
-				if (!access) {
-					//Breaking here will help short-circuit blockingQueue evaluation, and hopefully mitigate timeout issues
-					break;
-				}
-				else {
-					AccessRequestHandler(new AccessRequestBlocking(message, true), message.getReplyTo());
+				//If user can now access resource, process the request and remove it from the blocking queue
+				if (access) {
+					//remove before accessRequestHandler so presence in queue doesnt mess with that method
 					iter.remove();
+					AccessRequestHandler(new AccessRequestBlocking(message, true), message.getReplyTo());
 				}
 			}
 			//Finished checking blocking queue at this point
@@ -362,13 +361,13 @@ public class ResourceManagerActor extends UntypedActor {
 			}
 			//If the request is to DISABLE, this is the more complicated case
 			else if (managementRequest.getType() == ManagementRequestType.DISABLE) {
-				//If resource is already disabled, just reply with the request granted to the requester: no work to do
-				if (status == ResourceStatus.DISABLED) {
+				//If resource is already disabled, just reply with confirmation to the requester: no work to do
+				if (status.equals(ResourceStatus.DISABLED)) {
 					from.tell(new ManagementRequestGrantedMsg(managementRequest), getSelf());
 					log(LogMsg.makeManagementRequestGrantedLogMsg(from, getSelf(), managementRequest));
 				}
 				//If the resource is already enabled, it's trickier
-				else if (status == ResourceStatus.ENABLED) {
+				else if (status.equals(ResourceStatus.ENABLED)) {
 					List<UserLevel> temp = userAccessLevels.get(resourceName);
 					//Check to see if this user holds an access level for this resource
 					for (int i = 0; i < temp.size(); i++) {
@@ -378,16 +377,16 @@ public class ResourceManagerActor extends UntypedActor {
 							return;
 						}
 					}
-					//If user does not already have access, disable the resource
-					if (temp.isEmpty()) { //If no previous disable requests made, disable the resource and respond with request granted
+					//If no users have outstanding access requests for resource, disable it, and respond to disabler with request granted message
+					if (temp.isEmpty()) {
 						localResources.get(resourceName).disable();
-						log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), resourceName, ResourceStatus.DISABLED));
 						from.tell(new ManagementRequestGrantedMsg(managementRequest), getSelf());
 						log(LogMsg.makeManagementRequestGrantedLogMsg(from, getSelf(), managementRequest));
+						log(LogMsg.makeResourceStatusChangedLogMsg(getSelf(), resourceName, ResourceStatus.DISABLED));
 					}
 					toDisable.get(resourceName).add(msg); //Add request to disable queue
 
-					//Deny access to all messages queued for the resource
+					//Deny all pending blocking access requests with resource disabled message
 					Iterator<AccessRequestMsg> accessIter = blockingAccessRequests.iterator();
 					while (accessIter.hasNext()) {
 						AccessRequestMsg mess = accessIter.next();
@@ -585,62 +584,6 @@ public class ResourceManagerActor extends UntypedActor {
 			log(LogMsg.makeManagementRequestForwardedLogMsg(getSelf(), forwardTo, message.getRequest()));
 		}
 	}
-
-//	//Helper method to easily deny any kind of request message
-//	private void denyRequestMessage(Object msg, String denialReason) {
-//		AccessRequestMsg request;
-//		ManagementRequestMsg management;
-//		AccessReleaseMsg release;
-//		ActorRef user;
-//
-//		switch (denialReason) {
-//			case "RESOURCE_NOT_FOUND":
-//				if (msg instanceof AccessRequestMsg) {
-//					request = (AccessRequestMsg)msg;
-//					user = request.getReplyTo();
-//					user.tell(new AccessRequestDeniedMsg(request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_NOT_FOUND), getSelf());
-//					log(LogMsg.makeAccessRequestDeniedLogMsg(user, getSelf(), request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_NOT_FOUND));
-//				}
-//				else if (msg instanceof ManagementRequestMsg) {
-//					management = (ManagementRequestMsg)msg;
-//					user = management.getReplyTo();
-//					user.tell(new ManagementRequestDeniedMsg(management.getRequest(), ManagementRequestDenialReason.RESOURCE_NOT_FOUND), getSelf());
-//					log(LogMsg.makeManagementRequestDeniedLogMsg(user, getSelf(), management.getRequest(), ManagementRequestDenialReason.RESOURCE_NOT_FOUND));
-//				}
-//				//Not applicable for release messages, but makes WhoHasResourceResponseHandler a little neater
-//				else if (msg instanceof AccessReleaseMsg) {
-//					release = (AccessReleaseMsg)msg;
-//					user = release.getSender();
-//					log(LogMsg.makeAccessReleaseIgnoredLogMsg(user, getSelf(), release.getAccessRelease()));
-//				}
-//				break;
-//			case "RESOURCE_BUSY":
-//				request = (AccessRequestMsg)msg;
-//				user = request.getReplyTo();
-//				user.tell(new AccessRequestDeniedMsg(request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_BUSY), getSelf());
-//				log(LogMsg.makeAccessRequestDeniedLogMsg(user, getSelf(), request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_BUSY));
-//				break;
-//			case "RESOURCE_DISABLED":
-//				request = (AccessRequestMsg)msg;
-//				user = request.getReplyTo();
-//				user.tell(new AccessRequestDeniedMsg(request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_DISABLED), getSelf());
-//				log(LogMsg.makeAccessRequestDeniedLogMsg(user, getSelf(), request.getAccessRequest(), AccessRequestDenialReason.RESOURCE_DISABLED));
-//				break;
-//			case "ACCESS_HELD_BY_USER":
-//				management = (ManagementRequestMsg)msg;
-//				user = management.getReplyTo();
-//				user.tell(new ManagementRequestDeniedMsg(management.getRequest(), ManagementRequestDenialReason.ACCESS_HELD_BY_USER), getSelf());
-//				log(LogMsg.makeManagementRequestDeniedLogMsg(user, getSelf(), management.getRequest(), ManagementRequestDenialReason.ACCESS_HELD_BY_USER));
-//				break;
-//			default:
-//				//Ignore bad access release message
-//				release = (AccessReleaseMsg)msg;
-//				user = release.getSender();
-//				log(LogMsg.makeAccessReleaseIgnoredLogMsg(user, getSelf(), release.getAccessRelease()));
-//				break;
-//		}
-//	}
-
 
 	// You may want to add data structures for managing local resources and users, storing
 	// remote managers, etc.

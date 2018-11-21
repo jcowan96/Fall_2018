@@ -1,1 +1,11 @@
+write-request-n Printer_0
 write-request-b Printer_0
+write-request-b Printer_0
+write-request-b Printer_0
+write-request-b Printer_0
+read-request-b Printer_0
+read-request-b Printer_0
+read-request-b Printer_0
+read-request-b Printer_0
+
+

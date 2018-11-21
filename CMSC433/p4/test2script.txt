@@ -1,5 +1,4 @@
-disable Printer_0
+read-request-b Printer_0
 write-request-b Printer_0
-enable Printer_0
-write-request-b Printer_0
+read-release Printer_0
 write-release Printer_0

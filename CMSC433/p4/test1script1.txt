@@ -1,6 +1,3 @@
-read-request-b Printer_0
-sleep 500
-read-release Printer_0
-
-
-
+write-request-b Printer_0
+write-release Printer_0
+write-request-b Scanner_0

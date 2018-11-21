@@ -163,11 +163,14 @@ public class ResourceManagerActor extends UntypedActor {
 						AccessType accessType = temp.get(i).getAccessType();
 						if (!from.equals(temp.get(i).getUser())) { //If user is not the same as the requesting user
 							if (accessType.equals(AccessType.CONCURRENT_READ)) { //If you're requesting write and another user has read, cant access
-								if (requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_BLOCKING) || requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING))
+								if (requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_BLOCKING) || requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING)) {
 									access = false;
+									break; //We already know it cant have access, so safe to break here
+								}
 							}
 							else if (accessType.equals(AccessType.EXCLUSIVE_WRITE)) { //If another user has write access, cant get access
 								access = false;
+								break; //We already know it cant have access, so safe to break here
 							}
 						}
 						//If user is same as one in userAccessLevels do nothing, allow for re-entrant locking
@@ -234,7 +237,7 @@ public class ResourceManagerActor extends UntypedActor {
 				}
 			}
 		}
-		else { //If resource does not exist locally, either redirect the request if we know where to go, or find it if we dont
+		else { //If resource does not exist locally, either redirect the request if we know where to go, or find it if we don't
 			if (remoteResources.containsKey(resourceName)) //If location is known, forward the message
 				forwardRequestMessage(msg, remoteResources.get(resourceName), from);
 			else {
@@ -262,6 +265,7 @@ public class ResourceManagerActor extends UntypedActor {
 				if (accessLevel.getUser().equals(from) && accessLevel.getAccessType().equals(accessType)) { //If the user is in the accessLevel list, it can release
 					//Remove the user from the access list and log
 					temp.remove(accessLevel);
+					//userAccessLevels.put(resourceName, temp);
 					log(LogMsg.makeAccessReleasedLogMsg(from, getSelf(), accessRelease));
 					break;
 				}
@@ -317,16 +321,20 @@ public class ResourceManagerActor extends UntypedActor {
 					//If this user is not the sender, check its access level
 					if (!user.equals(from)) {
 						if (accType == AccessType.CONCURRENT_READ) { //Another user has concurrent read access, can grant if our request is also to read
-							if (requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_BLOCKING) || requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING))
+							if (requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_BLOCKING) || requestType.equals(AccessRequestType.EXCLUSIVE_WRITE_NONBLOCKING)) {
 								access = false;
-						} else if (accType.equals(AccessType.EXCLUSIVE_WRITE))  //Another user has exclusive write access, cant grant request
+								break; //We already know it cant have access, so safe to break here
+							}
+						} else if (accType.equals(AccessType.EXCLUSIVE_WRITE)) { //Another user has exclusive write access, cant grant request
 							access = false;
+							break; //We already know it cant have access, so safe to break here
+						}
 					}
 				}
 				//Checked all other users of the resource at this point, made it to end of list
 				//If user can now access resource, process the request and remove it from the blocking queue
 				if (access) {
-					//remove before accessRequestHandler so presence in queue doesnt mess with that method
+					//remove before accessRequestHandler so presence in queue doesn't mess with that method
 					iter.remove();
 					AccessRequestHandler(new AccessRequestBlocking(message, true), message.getReplyTo());
 				}
@@ -391,7 +399,7 @@ public class ResourceManagerActor extends UntypedActor {
 					while (accessIter.hasNext()) {
 						AccessRequestMsg mess = accessIter.next();
 						if (resourceName.equals(mess.getAccessRequest().getResourceName())) {
-							accessIter.remove();
+							accessIter.remove(); //Remove access request from queue if trying to access the same resource
 							mess.getReplyTo().tell(new AccessRequestDeniedMsg(mess.getAccessRequest(), AccessRequestDenialReason.RESOURCE_DISABLED), getSelf());
 							log(LogMsg.makeAccessRequestDeniedLogMsg(mess.getReplyTo(), getSelf(), mess.getAccessRequest(), AccessRequestDenialReason.RESOURCE_DISABLED));
 						}
@@ -455,7 +463,7 @@ public class ResourceManagerActor extends UntypedActor {
 		else { //Respondent has the resource locally, so go through stored messages and forward to correct manager
 			List<HashMap<Object, Integer>> temp = unknownRemoteMap.get(resourceName);
 			if (temp != null) {
-				for (int i = 0; i < temp.size(); i++) {
+				for (int i = 0; i < temp.size(); i++) { //Forward all pending request messages to the appropriate manager
 					HashMap<Object, Integer> unk = temp.get(i);
 					Object mess = unk.keySet().toArray()[0];
 					forwardRequestMessage(mess, from, getSelf());

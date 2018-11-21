@@ -15,8 +15,8 @@
       <file leaf-file-name="ResourceManagerActor.java" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/actors/ResourceManagerActor.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="455">
-              <caret line="326" column="108" lean-forward="true" selection-start-line="326" selection-start-column="108" selection-end-line="326" selection-end-column="108" />
+            <state relative-caret-position="218">
+              <caret line="275" column="13" lean-forward="true" selection-start-line="275" selection-start-column="13" selection-end-line="275" selection-end-column="13" />
               <folding>
                 <element signature="imports" expanded="true" />
                 <element signature="method#AddInitialLocalResourcesHandler#0;class#ResourceManagerActor#0" expanded="false" />
@@ -26,8 +26,19 @@
                 <element signature="method#WhoHasResourceResponseHandler#0;class#ResourceManagerActor#0" expanded="false" />
                 <element signature="method#searchUnknownRemote#0;class#ResourceManagerActor#0" expanded="false" />
                 <element signature="method#forwardRequestMessage#0;class#ResourceManagerActor#0" expanded="false" />
+                <element signature="e#29092#29178#0" expanded="false" />
                 <element signature="method#onReceive#0;class#ResourceManagerActor#0" expanded="false" />
               </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="AccessRequestMsg.java" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/messages/AccessRequestMsg.java">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="170">
+              <caret line="11" column="13" lean-forward="false" selection-start-line="11" selection-start-column="13" selection-end-line="11" selection-end-column="13" />
+              <folding />
             </state>
           </provider>
         </entry>
@@ -45,7 +56,7 @@
       <file leaf-file-name="Main.java" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/util/Main.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="357">
+            <state relative-caret-position="143">
               <caret line="33" column="55" lean-forward="false" selection-start-line="33" selection-start-column="55" selection-end-line="33" selection-end-column="55" />
               <folding />
             </state>
@@ -65,8 +76,8 @@
       <file leaf-file-name="test1script1.txt" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/test1script1.txt">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="34">
-              <caret line="2" column="22" lean-forward="false" selection-start-line="2" selection-start-column="22" selection-end-line="2" selection-end-column="22" />
+            <state relative-caret-position="17">
+              <caret line="1" column="0" lean-forward="false" selection-start-line="1" selection-start-column="0" selection-end-line="1" selection-end-column="23" />
               <folding />
             </state>
           </provider>
@@ -75,8 +86,8 @@
       <file leaf-file-name="test1script2.txt" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/test1script2.txt">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="136">
-              <caret line="8" column="24" lean-forward="false" selection-start-line="8" selection-start-column="24" selection-end-line="8" selection-end-column="24" />
+            <state relative-caret-position="34">
+              <caret line="2" column="0" lean-forward="true" selection-start-line="2" selection-start-column="0" selection-end-line="2" selection-end-column="0" />
               <folding />
             </state>
           </provider>
@@ -85,8 +96,8 @@
       <file leaf-file-name="test2script.txt" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/test2script.txt">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="51">
-              <caret line="3" column="23" lean-forward="false" selection-start-line="3" selection-start-column="23" selection-end-line="3" selection-end-column="23" />
+            <state relative-caret-position="0">
+              <caret line="0" column="15" lean-forward="true" selection-start-line="0" selection-start-column="15" selection-end-line="0" selection-end-column="15" />
               <folding />
             </state>
           </provider>
@@ -113,13 +124,10 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>MANAGEMENT</find>
-      <find>makeManagementRequestReceived</find>
       <find>userAccessLevels</find>
       <find>hasResource</find>
       <find>boolean hasResource</find>
       <find>DeniedLogMsg</find>
-      <find>boolean</find>
       <find>disable</find>
       <find>print</find>
       <find>!useraccess</find>
@@ -141,8 +149,11 @@
       <find>accessrequestdenied</find>
       <find>println</find>
       <find>accessrequestdeniedlog</find>
-      <find>granted</find>
       <find>blockingAccessRequests</find>
+      <find>remove</find>
+      <find>iterator</find>
+      <find>boolean</find>
+      <find>granted</find>
     </findStrings>
     <replaceStrings>
       <replace>unknownRemoteMap</replace>
@@ -165,8 +176,8 @@
         <option value="$PROJECT_DIR$/src/cmsc433/p4/util/AccessRequestBlocking.java" />
         <option value="$PROJECT_DIR$/test2script.txt" />
         <option value="$PROJECT_DIR$/src/cmsc433/p4/util/Main.java" />
-        <option value="$PROJECT_DIR$/test1script1.txt" />
         <option value="$PROJECT_DIR$/test1script2.txt" />
+        <option value="$PROJECT_DIR$/test1script1.txt" />
         <option value="$PROJECT_DIR$/src/cmsc433/p4/actors/ResourceManagerActor.java" />
       </list>
     </option>
@@ -396,16 +407,15 @@
       <option name="presentableId" value="Default" />
       <updated>1541995908443</updated>
       <workItem from="1541995911286" duration="453000" />
-      <workItem from="1542225435897" duration="83815000" />
+      <workItem from="1542225435897" duration="86375000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="84268000" />
+    <option name="totallyTimeSpent" value="86828000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="-8" y="-8" width="1936" height="1056" extended-state="6" />
-    <editor active="true" />
     <layout>
       <window_info id="Palette" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
@@ -416,7 +426,7 @@
       <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="true" content_ui="tabs" />
       <window_info id="Maven Projects" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="false" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.26723224" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.26723224" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Capture Tool" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Designer" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
@@ -473,7 +483,7 @@
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
-      <option name="time" value="16" />
+      <option name="time" value="19" />
     </breakpoint-manager>
     <watches-manager />
   </component>
@@ -745,14 +755,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/test3script1.txt">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="51">
-          <caret line="3" column="23" lean-forward="true" selection-start-line="3" selection-start-column="23" selection-end-line="3" selection-end-column="23" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/actors/UserActor.java">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="68">
@@ -793,6 +795,14 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/enums/AccessType.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="34">
+          <caret line="2" column="12" lean-forward="false" selection-start-line="2" selection-start-column="12" selection-end-line="2" selection-end-column="12" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/messages/AccessRequestMsg.java">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="170">
@@ -803,16 +813,16 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/test2script.txt">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="51">
-          <caret line="3" column="23" lean-forward="false" selection-start-line="3" selection-start-column="23" selection-end-line="3" selection-end-column="23" />
+        <state relative-caret-position="0">
+          <caret line="0" column="15" lean-forward="true" selection-start-line="0" selection-start-column="15" selection-end-line="0" selection-end-column="15" />
           <folding />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/enums/AccessType.java">
+    <entry file="file://$PROJECT_DIR$/test3script1.txt">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="34">
-          <caret line="2" column="12" lean-forward="false" selection-start-line="2" selection-start-column="12" selection-end-line="2" selection-end-column="12" />
+        <state relative-caret-position="51">
+          <caret line="3" column="23" lean-forward="true" selection-start-line="3" selection-start-column="23" selection-end-line="3" selection-end-column="23" />
           <folding />
         </state>
       </provider>
@@ -825,34 +835,34 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/test1script1.txt">
+    <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/util/Main.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="34">
-          <caret line="2" column="22" lean-forward="false" selection-start-line="2" selection-start-column="22" selection-end-line="2" selection-end-column="22" />
+        <state relative-caret-position="143">
+          <caret line="33" column="55" lean-forward="false" selection-start-line="33" selection-start-column="55" selection-end-line="33" selection-end-column="55" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/test1script2.txt">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="136">
-          <caret line="8" column="24" lean-forward="false" selection-start-line="8" selection-start-column="24" selection-end-line="8" selection-end-column="24" />
+        <state relative-caret-position="34">
+          <caret line="2" column="0" lean-forward="true" selection-start-line="2" selection-start-column="0" selection-end-line="2" selection-end-column="0" />
           <folding />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/util/Main.java">
+    <entry file="file://$PROJECT_DIR$/test1script1.txt">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="357">
-          <caret line="33" column="55" lean-forward="false" selection-start-line="33" selection-start-column="55" selection-end-line="33" selection-end-column="55" />
+        <state relative-caret-position="17">
+          <caret line="1" column="0" lean-forward="false" selection-start-line="1" selection-start-column="0" selection-end-line="1" selection-end-column="23" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/cmsc433/p4/actors/ResourceManagerActor.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="455">
-          <caret line="326" column="108" lean-forward="true" selection-start-line="326" selection-start-column="108" selection-end-line="326" selection-end-column="108" />
+        <state relative-caret-position="218">
+          <caret line="275" column="13" lean-forward="true" selection-start-line="275" selection-start-column="13" selection-end-line="275" selection-end-column="13" />
           <folding>
             <element signature="imports" expanded="true" />
             <element signature="method#AddInitialLocalResourcesHandler#0;class#ResourceManagerActor#0" expanded="false" />
@@ -862,6 +872,7 @@
             <element signature="method#WhoHasResourceResponseHandler#0;class#ResourceManagerActor#0" expanded="false" />
             <element signature="method#searchUnknownRemote#0;class#ResourceManagerActor#0" expanded="false" />
             <element signature="method#forwardRequestMessage#0;class#ResourceManagerActor#0" expanded="false" />
+            <element signature="e#29092#29178#0" expanded="false" />
             <element signature="method#onReceive#0;class#ResourceManagerActor#0" expanded="false" />
           </folding>
         </state>
